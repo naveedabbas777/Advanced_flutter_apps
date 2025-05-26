@@ -1,4 +1,4 @@
-# student_management_cursor
+# teacher_app
 
 A new Flutter project.
 
