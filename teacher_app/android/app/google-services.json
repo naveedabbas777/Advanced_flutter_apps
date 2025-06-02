@@ -1,0 +1,68 @@
+{
+  "project_info": {
+    "project_number": "336577878179",
+    "project_id": "student2-d15fd",
+    "storage_bucket": "student2-d15fd.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:336577878179:android:0847a6e1c5c93c3b5e8716",
+        "android_client_info": {
+          "package_name": "com.example.student_management"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "336577878179-9n7v5ebl2tr7bp9cu3j60ajk5bn9qo56.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAnxOckCP9JOwN4D3dM92Ya9T4hF8zpyCI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "336577878179-9n7v5ebl2tr7bp9cu3j60ajk5bn9qo56.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:336577878179:android:cf4e6174ffb314785e8716",
+        "android_client_info": {
+          "package_name": "com.example.teacher_app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "336577878179-9n7v5ebl2tr7bp9cu3j60ajk5bn9qo56.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAnxOckCP9JOwN4D3dM92Ya9T4hF8zpyCI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "336577878179-9n7v5ebl2tr7bp9cu3j60ajk5bn9qo56.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

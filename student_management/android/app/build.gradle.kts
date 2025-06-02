@@ -6,12 +6,12 @@ plugins {
 }
 
 android {
-    namespace = "com.example.teacher_app"
+    namespace = "com.example.student_management"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = "27.0.12077973"
 
     defaultConfig {
-        applicationId = "com.example.teacher_app"
+        applicationId = "com.example.student_management"
         minSdk = 23 // ✅ Set to match Firebase min requirement
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
