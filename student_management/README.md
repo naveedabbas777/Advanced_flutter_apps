@@ -1,12 +1,24 @@
 # student_management
 
-A new Flutter project.
+A Flutter project.
 
 ## Getting Started
 
 This project is a starting point for a Flutter application.
 
-A few resources to get you started if this is your first Flutter project:
+
+
+<img src="images/1.jpeg">
+<img src="images/2.jpeg">
+<img src="images/3.jpeg">
+<img src="images/4.jpeg">
+<img src="images/5.jpeg">
+<img src="images/5.jpeg">
+<img src="images/6.jpeg">
+<img src="images/7.jpeg">
+<img src="images/8.jpeg">
+<img src="images/9.jpeg">
+
 
 - [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
 - [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
