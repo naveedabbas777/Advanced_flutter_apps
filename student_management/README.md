@@ -6,7 +6,7 @@ A Flutter project.
 
 This project is a starting point for a Flutter application.
 
-
+Student Management  App
 
 <img src="images/1.jpeg">
 <img src="images/2.jpeg">
@@ -20,9 +20,10 @@ This project is a starting point for a Flutter application.
 <img src="images/9.jpeg">
 
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+Modules of this app:
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+My Courses (previously Subjects): This module allows students to view the academic subjects they are currently enrolled in. They can see details about each course, such as its name and description.
+My Tasks: In this module, students can see a list of all tasks assigned to them by their teachers. They have the functionality to mark these tasks as complete once finished.
+Messages: This module facilitates communication between students and their assigned teachers. Students can view their chat history with their teacher and send new messages.
+Reports: This module is designed to display various reports related to the student's academic progress, grades, or other relevant performance metrics. Currently, it serves as a placeholder for future implementation of detailed reporting features.
+

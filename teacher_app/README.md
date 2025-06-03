@@ -3,7 +3,7 @@
 A new Flutter project.
 
 ## Getting Started
-<h1> Teacher app</h1>
+< Teacher app
 
 <img src="images/1.jpeg">
 <img src="images/2.jpeg">
@@ -17,7 +17,7 @@ A new Flutter project.
 <img src="images/9.jpeg">
 <img src="images/10.jpeg">
 <img src="images/11.jpeg">
-<h1>Modules</h2>
+Modules
 Students: This module allows teachers to view and manage all the students they have added to the system. Currently, it enables teachers to add new student profiles.
 Tasks: 
 In this module, teachers can create, assign, and delete tasks for their students. They can also view the tasks they have assigned to each student.
@@ -29,9 +29,3 @@ Subjects:
 This module enables teachers to manage the subjects they teach. They can add new subjects, edit existing ones, and enroll their students in specific subjects. They also have the ability to delete subjects.
 Registrations: In our current implementation, new users register as teachers directly via the authentication screen, and teachers add students through the "Students" module. There isn't a separate "Registrations" module in the code for managing new sign-ups beyond the initial teacher registration.
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
