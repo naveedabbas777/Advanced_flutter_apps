@@ -1,121 +1,108 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:provider/provider.dart';
+import 'providers/auth_provider.dart';
+import 'providers/theme_provider.dart';
+import 'screens/auth/login_screen.dart';
+import 'screens/auth/register_screen.dart';
+import 'screens/home/home_screen.dart';
+import 'screens/groups/create_group_screen.dart';
+import 'screens/groups/group_details_screen.dart';
+import 'screens/expenses/add_expense_screen.dart';
+import 'screens/groups/add_member_screen.dart';
+import 'screens/profile/profile_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp();
-  runApp(MaterialApp(home: CrudApp(), debugShowCheckedModeBanner: false));
-}
-
-class CrudApp extends StatefulWidget {
-  @override
-  _CrudAppState createState() => _CrudAppState();
-}
-
-class _CrudAppState extends State<CrudApp> {
-  final TextEditingController nameController = TextEditingController();
-  final TextEditingController ageController = TextEditingController();
-  final CollectionReference students = FirebaseFirestore.instance.collection('students');
-
-  Future<void> addStudent() async {
-    await students.add({
-      'name': nameController.text.trim(),
-      'age': int.tryParse(ageController.text.trim()) ?? 0,
-    });
-    nameController.clear();
-    ageController.clear();
-  }
-
-  Future<void> updateStudent(String id, String name, int age) async {
-    await students.doc(id).update({'name': name, 'age': age});
-  }
-
-  Future<void> deleteStudent(String id) async {
-    await students.doc(id).delete();
-  }
-
-  void showEditDialog(DocumentSnapshot doc) {
-    final editName = TextEditingController(text: doc['name']);
-    final editAge = TextEditingController(text: doc['age'].toString());
-
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text("Update Student"),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(controller: editName, decoration: InputDecoration(labelText: "Name")),
-            TextField(controller: editAge, decoration: InputDecoration(labelText: "Age"), keyboardType: TextInputType.number),
-          ],
+  try {
+    await Firebase.initializeApp();
+    runApp(MyApp());
+  } catch (e) {
+    print('Error initializing Firebase: $e');
+    // You might want to show an error screen here
+    runApp(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: Text('Error initializing app. Please try again later.'),
+          ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              updateStudent(doc.id, editName.text.trim(), int.tryParse(editAge.text.trim()) ?? 0);
-              Navigator.pop(context);
-            },
-            child: Text("Update"),
-          )
-        ],
       ),
     );
   }
+}
 
-  Widget studentForm() {
-    return Column(
-      children: [
-        TextField(controller: nameController, decoration: InputDecoration(labelText: "Name")),
-        SizedBox(height: 10),
-        TextField(
-          controller: ageController,
-          decoration: InputDecoration(labelText: "Age"),
-          keyboardType: TextInputType.number,
-        ),
-        SizedBox(height: 10),
-        ElevatedButton(onPressed: addStudent, child: Text("Add Student")),
-        Divider(),
+class MyApp extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AppAuthProvider()),
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
       ],
-    );
-  }
-
-  Widget studentList() {
-    return Expanded(
-      child: StreamBuilder<QuerySnapshot>(
-        stream: students.snapshots(),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) return Center(child: CircularProgressIndicator());
-          final docs = snapshot.data!.docs;
-          return ListView.builder(
-            itemCount: docs.length,
-            itemBuilder: (_, i) {
-              final doc = docs[i];
-              return ListTile(
-                title: Text(doc['name']),
-                subtitle: Text("Age: ${doc['age']}"),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(icon: Icon(Icons.edit), onPressed: () => showEditDialog(doc)),
-                    IconButton(icon: Icon(Icons.delete), onPressed: () => deleteStudent(doc.id)),
-                  ],
-                ),
-              );
+      child: Consumer<ThemeProvider>(
+        builder: (context, themeProvider, child) {
+          return MaterialApp(
+            title: 'Split App',
+            theme: themeProvider.currentTheme,
+            home: Consumer<AppAuthProvider>(
+              builder: (context, authProvider, child) {
+                if (authProvider.isLoading) {
+                  return const Scaffold(
+                    body: Center(
+                      child: CircularProgressIndicator(),
+                    ),
+                  );
+                }
+                return authProvider.user != null
+                    ? HomeScreen()
+                    : LoginScreen();
+              },
+            ),
+            onGenerateRoute: (settings) {
+              switch (settings.name) {
+                case '/':
+                  return MaterialPageRoute(builder: (_) => HomeScreen());
+                case '/login':
+                  return MaterialPageRoute(builder: (_) => LoginScreen());
+                case '/register':
+                  return MaterialPageRoute(builder: (_) => RegisterScreen());
+                case '/profile':
+                  return MaterialPageRoute(builder: (_) => ProfileScreen());
+                case '/group-details':
+                  final args = settings.arguments as Map<String, dynamic>;
+                  return MaterialPageRoute(
+                    builder: (_) => GroupDetailsScreen(
+                      groupId: args['groupId'] as String,
+                    ),
+                  );
+                case '/add-expense':
+                  final args = settings.arguments as Map<String, dynamic>;
+                  return MaterialPageRoute(
+                    builder: (_) => AddExpenseScreen(
+                      groupId: args['groupId'] as String,
+                      groupName: args['groupName'] as String,
+                    ),
+                  );
+                case '/add-member':
+                  final args = settings.arguments as Map<String, dynamic>;
+                  return MaterialPageRoute(
+                    builder: (_) => AddMemberScreen(
+                      groupId: args['groupId'] as String,
+                    ),
+                  );
+                default:
+                  return MaterialPageRoute(
+                    builder: (_) => Scaffold(
+                      body: Center(
+                        child: Text('Route not found!'),
+                      ),
+                    ),
+                  );
+              }
             },
           );
         },
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text("Firestore CRUD")),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(children: [studentForm(), studentList()]),
       ),
     );
   }
