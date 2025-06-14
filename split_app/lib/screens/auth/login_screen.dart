@@ -95,7 +95,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     )
                     ..loadRequest(
                       Uri.parse(
-                        'https://www.google.com/recaptcha/api2/anchor?k=YOUR_RECAPTCHA_SITE_KEY&co=aHR0cHM6Ly9leGFtcGxlLmNvbTo0NDM.&hl=en&v=v1559547661201&size=normal&cb=1234567890',
+                        'https://www.google.com/recaptcha/api2/anchor?k=6Ldm8mArAAAAAI0hSSRphzEBD3SoCPNkp639BMD9&co=aHR0cHM6Ly9leGFtcGxlLmNvbTo0NDM.&hl=en&v=v1559547661201&size=normal&cb=1234567890',
                       ),
                     ),
                 ),
