@@ -29,6 +29,7 @@ class AppAuthProvider extends ChangeNotifier {
   bool get isAuthenticated => _user != null;
   bool get isLoading => _isLoading;
   String? get error => _error;
+  User? get currentUser => _user;
 
   Future<void> _loadUserData() async {
     if (_user != null) {
@@ -60,33 +61,38 @@ class AppAuthProvider extends ChangeNotifier {
   }
 
   Future<void> register(String email, String password, String name, String recaptchaToken) async {
-    try {
-      _isLoading = true;
-      _error = null;
-      notifyListeners();
+    _isLoading = true;
+    notifyListeners();
 
-      // Verify reCAPTCHA first
-      final isVerified = await _verifyRecaptcha(recaptchaToken);
-      if (!isVerified) {
-        throw Exception('reCAPTCHA verification failed');
+    try {
+      // Verify reCAPTCHA token
+      final response = await http.post(
+        Uri.parse('https://www.google.com/recaptcha/api/siteverify'),
+        body: {
+          'secret': 'YOUR_RECAPTCHA_SECRET_KEY',
+          'response': recaptchaToken,
+        },
+      );
+
+      final responseData = json.decode(response.body);
+      if (!responseData['success']) {
+        throw 'reCAPTCHA verification failed';
       }
 
+      // Create user account
       final userCredential = await _auth.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
 
-      if (userCredential.user != null) {
-        await _firestore.collection('users').doc(userCredential.user!.uid).set({
-          'name': name,
-          'email': email,
-          'createdAt': FieldValue.serverTimestamp(),
-        });
-      }
-    } on FirebaseAuthException catch (e) {
-      _error = e.message ?? 'An error occurred during registration';
+      // Create user document in Firestore
+      await FirebaseFirestore.instance.collection('users').doc(userCredential.user!.uid).set({
+        'name': name,
+        'email': email,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
     } catch (e) {
-      _error = e.toString();
+      rethrow;
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -94,25 +100,30 @@ class AppAuthProvider extends ChangeNotifier {
   }
 
   Future<void> login(String email, String password, String recaptchaToken) async {
-    try {
-      _isLoading = true;
-      _error = null;
-      notifyListeners();
+    _isLoading = true;
+    notifyListeners();
 
-      // Verify reCAPTCHA first
-      final isVerified = await _verifyRecaptcha(recaptchaToken);
-      if (!isVerified) {
-        throw Exception('reCAPTCHA verification failed');
+    try {
+      // Verify reCAPTCHA token
+      final response = await http.post(
+        Uri.parse('https://www.google.com/recaptcha/api/siteverify'),
+        body: {
+          'secret': 'YOUR_RECAPTCHA_SECRET_KEY',
+          'response': recaptchaToken,
+        },
+      );
+
+      final responseData = json.decode(response.body);
+      if (!responseData['success']) {
+        throw 'reCAPTCHA verification failed';
       }
 
       await _auth.signInWithEmailAndPassword(
         email: email,
         password: password,
       );
-    } on FirebaseAuthException catch (e) {
-      _error = e.message ?? 'An error occurred during login';
     } catch (e) {
-      _error = e.toString();
+      rethrow;
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -121,16 +132,9 @@ class AppAuthProvider extends ChangeNotifier {
 
   Future<void> logout() async {
     try {
-      _isLoading = true;
-      _error = null;
-      notifyListeners();
-
       await _auth.signOut();
     } catch (e) {
-      _error = e.toString();
-    } finally {
-      _isLoading = false;
-      notifyListeners();
+      rethrow;
     }
   }
 
