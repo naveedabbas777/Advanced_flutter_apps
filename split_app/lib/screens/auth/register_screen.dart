@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 // import 'package:webview_flutter/webview_flutter.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/theme_provider.dart';
 
 class RegisterScreen extends StatefulWidget {
+  const RegisterScreen({super.key});
+
   @override
-  _RegisterScreenState createState() => _RegisterScreenState();
+  State<RegisterScreen> createState() => _RegisterScreenState();
 }
 
 class _RegisterScreenState extends State<RegisterScreen> {
@@ -14,6 +17,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
+  bool _isRegistered = false;
   // String? _recaptchaToken;
   // bool _isRecaptchaVerified = false;
 
@@ -27,22 +31,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Future<void> _register() async {
     if (_formKey.currentState!.validate()) {
-      try {
-        await context.read<AppAuthProvider>().register(
-              _emailController.text.trim(),
-              _passwordController.text.trim(),
-              _nameController.text.trim(),
-              // _recaptchaToken!,
-            );
-        if (mounted) {
-          Navigator.pop(context);
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(e.toString())),
-          );
-        }
+      final authProvider = Provider.of<AppAuthProvider>(context, listen: false);
+      await authProvider.register(
+        _emailController.text.trim(),
+        _passwordController.text,
+        _nameController.text.trim(),
+      );
+
+      if (authProvider.error == null) {
+        setState(() {
+          _isRegistered = true;
+        });
+      } else {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(authProvider.error!)),
+        );
       }
     }
     // else if (!_isRecaptchaVerified) {
@@ -50,6 +54,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
     //     SnackBar(content: Text('Please complete the reCAPTCHA verification')),
     //   );
     // }
+  }
+
+  Future<void> _resendVerificationEmail() async {
+    final authProvider = Provider.of<AppAuthProvider>(context, listen: false);
+    await authProvider.resendVerificationEmail();
+
+    if (authProvider.error == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Verification email sent!')),
+      );
+    } else {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(authProvider.error!)),
+      );
+    }
   }
 
   // void _showRecaptchaDialog() {
@@ -115,111 +136,168 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final authProvider = Provider.of<AppAuthProvider>(context);
+    final themeProvider = Provider.of<ThemeProvider>(context);
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Register'),
+        title: const Text('Register'),
       ),
       body: Center(
         child: SingleChildScrollView(
-          padding: EdgeInsets.all(24.0),
+          padding: const EdgeInsets.all(24.0),
           child: Form(
             key: _formKey,
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                Icon(
+                  Icons.person_add,
+                  size: 80,
+                  color: theme.colorScheme.primary,
+                ),
+                const SizedBox(height: 24),
                 Text(
-                  'Create Your Account',
-                  style: Theme.of(context).textTheme.titleLarge,
+                  'Create Account',
+                  style: theme.textTheme.headlineMedium?.copyWith(
+                    color: theme.colorScheme.primary,
+                    fontWeight: FontWeight.bold,
+                  ),
                   textAlign: TextAlign.center,
                 ),
-                SizedBox(height: 10),
-                Text(
-                  'Sign up to get started',
-                  style: Theme.of(context).textTheme.titleMedium,
-                  textAlign: TextAlign.center,
-                ),
-                SizedBox(height: 30),
-                TextFormField(
-                  controller: _nameController,
-                  decoration: InputDecoration(
-                    labelText: 'Name',
-                    prefixIcon: Icon(Icons.person),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter your name';
-                    }
-                    return null;
-                  },
-                ),
-                SizedBox(height: 16),
-                TextFormField(
-                  controller: _emailController,
-                  decoration: InputDecoration(
-                    labelText: 'Email',
-                    prefixIcon: Icon(Icons.email),
-                  ),
-                  keyboardType: TextInputType.emailAddress,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter your email';
-                    }
-                    if (!value.contains('@')) {
-                      return 'Please enter a valid email';
-                    }
-                    return null;
-                  },
-                ),
-                SizedBox(height: 16),
-                TextFormField(
-                  controller: _passwordController,
-                  decoration: InputDecoration(
-                    labelText: 'Password',
-                    prefixIcon: Icon(Icons.lock),
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _obscurePassword
-                            ? Icons.visibility_off
-                            : Icons.visibility,
+                const SizedBox(height: 32),
+                if (!_isRegistered) ...[
+                  TextFormField(
+                    controller: _nameController,
+                    decoration: InputDecoration(
+                      labelText: 'Full Name',
+                      prefixIcon: const Icon(Icons.person),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      onPressed: () {
-                        setState(() {
-                          _obscurePassword = !_obscurePassword;
-                        });
-                      },
                     ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter your name';
+                      }
+                      return null;
+                    },
                   ),
-                  obscureText: _obscurePassword,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter your password';
-                    }
-                    return null;
-                  },
-                ),
-                SizedBox(height: 24),
-                ElevatedButton(
-                  onPressed: authProvider.isLoading ? null : _register,
-                  child: authProvider.isLoading
-                      ? SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                          ),
-                        )
-                      : Text('Register'),
-                ),
-                SizedBox(height: 16),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: InputDecoration(
+                      labelText: 'Email',
+                      prefixIcon: const Icon(Icons.email),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter your email';
+                      }
+                      if (!value.contains('@')) {
+                        return 'Please enter a valid email';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _passwordController,
+                    obscureText: _obscurePassword,
+                    decoration: InputDecoration(
+                      labelText: 'Password',
+                      prefixIcon: const Icon(Icons.lock),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscurePassword ? Icons.visibility : Icons.visibility_off,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _obscurePassword = !_obscurePassword;
+                          });
+                        },
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter your password';
+                      }
+                      if (value.length < 6) {
+                        return 'Password must be at least 6 characters';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 24),
+                  ElevatedButton(
+                    onPressed: authProvider.isLoading ? null : _register,
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: authProvider.isLoading
+                        ? const CircularProgressIndicator()
+                        : const Text('Register'),
+                  ),
+                ] else ...[
+                  Icon(
+                    Icons.mark_email_read,
+                    size: 80,
+                    color: theme.colorScheme.primary,
+                  ),
+                  const SizedBox(height: 24),
+                  Text(
+                    'Verification Email Sent!',
+                    style: theme.textTheme.headlineMedium?.copyWith(
+                      color: theme.colorScheme.primary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Please check your email and click the verification link to activate your account.',
+                    style: theme.textTheme.bodyLarge,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 24),
+                  ElevatedButton(
+                    onPressed: _resendVerificationEmail,
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: const Text('Resend Verification Email'),
+                  ),
+                ],
+                const SizedBox(height: 16),
                 TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Back to Login'),
+                ),
+                const SizedBox(height: 16),
+                IconButton(
                   onPressed: () {
-                    Navigator.pop(context);
+                    themeProvider.toggleTheme();
                   },
-                  child: Text('Already have an account? Login'),
+                  icon: Icon(
+                    themeProvider.isDarkMode
+                        ? Icons.light_mode
+                        : Icons.dark_mode,
+                  ),
                 ),
               ],
             ),
