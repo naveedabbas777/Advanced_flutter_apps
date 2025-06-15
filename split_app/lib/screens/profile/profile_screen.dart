@@ -1,91 +1,90 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/theme_provider.dart';
 
 class ProfileScreen extends StatefulWidget {
+  const ProfileScreen({super.key});
+
   @override
-  _ProfileScreenState createState() => _ProfileScreenState();
+  State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
+  final _usernameController = TextEditingController();
   bool _isEditing = false;
-  bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
-    _loadUserData();
+    final userModel = context.read<AppAuthProvider>().userModel;
+    if (userModel != null) {
+      _usernameController.text = userModel.username;
+    }
   }
 
   @override
   void dispose() {
-    _nameController.dispose();
+    _usernameController.dispose();
     super.dispose();
-  }
-
-  Future<void> _loadUserData() async {
-    final user = context.read<AppAuthProvider>().currentUser;
-    if (user != null) {
-      final doc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .get();
-      if (doc.exists) {
-        _nameController.text = doc.data()?['name'] ?? '';
-      }
-    }
   }
 
   Future<void> _updateProfile() async {
     if (_formKey.currentState!.validate()) {
-      setState(() => _isLoading = true);
-      try {
-        final user = context.read<AppAuthProvider>().currentUser;
-        if (user != null) {
-          await FirebaseFirestore.instance
-              .collection('users')
-              .doc(user.uid)
-              .update({
-            'name': _nameController.text.trim(),
-            'updatedAt': FieldValue.serverTimestamp(),
-          });
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Profile updated successfully')),
-          );
-          setState(() => _isEditing = false);
-        }
-      } catch (e) {
+      final authProvider = Provider.of<AppAuthProvider>(context, listen: false);
+      await authProvider.updateProfile(
+        username: _usernameController.text.trim(),
+      );
+
+      if (authProvider.error != null) {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to update profile: $e')),
+          SnackBar(content: Text(authProvider.error!)),
         );
-      } finally {
-        setState(() => _isLoading = false);
+      } else {
+        setState(() {
+          _isEditing = false;
+        });
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Profile updated successfully')),
+        );
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final user = context.watch<AppAuthProvider>().currentUser;
-    final themeProvider = context.watch<ThemeProvider>();
+    final theme = Theme.of(context);
+    final authProvider = Provider.of<AppAuthProvider>(context);
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final userModel = authProvider.userModel;
+
+    if (userModel == null) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Profile'),
+        title: const Text('Profile'),
         actions: [
-          if (!_isEditing)
-            IconButton(
-              icon: Icon(Icons.edit),
-              onPressed: () => setState(() => _isEditing = true),
+          IconButton(
+            icon: Icon(
+              themeProvider.isDarkMode ? Icons.light_mode : Icons.dark_mode,
             ),
+            onPressed: () {
+              themeProvider.toggleTheme();
+            },
+          ),
         ],
       ),
       body: SingleChildScrollView(
-        padding: EdgeInsets.all(16),
+        padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -94,72 +93,63 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 children: [
                   CircleAvatar(
                     radius: 50,
-                    backgroundColor: Theme.of(context).primaryColor,
+                    backgroundColor: theme.colorScheme.primary,
                     child: Text(
-                      user?.email?.substring(0, 1).toUpperCase() ?? 'U',
-                      style: TextStyle(
-                        fontSize: 32,
-                        color: Colors.white,
+                      userModel.username[0].toUpperCase(),
+                      style: theme.textTheme.headlineLarge?.copyWith(
+                        color: theme.colorScheme.onPrimary,
                       ),
                     ),
                   ),
-                  SizedBox(height: 16),
-                  Text(
-                    user?.email ?? '',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
+                  const SizedBox(height: 16),
+                  if (!_isEditing)
+                    Text(
+                      userModel.username,
+                      style: theme.textTheme.headlineMedium,
+                    ),
                 ],
               ),
             ),
-            SizedBox(height: 32),
+            const SizedBox(height: 32),
             if (_isEditing)
               Form(
                 key: _formKey,
                 child: Column(
                   children: [
                     TextFormField(
-                      controller: _nameController,
+                      controller: _usernameController,
                       decoration: InputDecoration(
-                        labelText: 'Name',
-                        prefixIcon: Icon(Icons.person),
+                        labelText: 'Username',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
                       validator: (value) {
                         if (value == null || value.isEmpty) {
-                          return 'Please enter your name';
+                          return 'Please enter a username';
                         }
                         return null;
                       },
                     ),
-                    SizedBox(height: 16),
+                    const SizedBox(height: 16),
                     Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
                       children: [
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: _isLoading ? null : _updateProfile,
-                            child: _isLoading
-                                ? SizedBox(
-                                    height: 20,
-                                    width: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      valueColor: AlwaysStoppedAnimation<Color>(
-                                          Colors.white),
-                                    ),
-                                  )
-                                : Text('Save'),
-                          ),
+                        TextButton(
+                          onPressed: () {
+                            setState(() {
+                              _isEditing = false;
+                              _usernameController.text = userModel.username;
+                            });
+                          },
+                          child: const Text('Cancel'),
                         ),
-                        SizedBox(width: 16),
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: _isLoading
-                                ? null
-                                : () {
-                                    setState(() => _isEditing = false);
-                                    _loadUserData();
-                                  },
-                            child: Text('Cancel'),
-                          ),
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          onPressed: authProvider.isLoading ? null : _updateProfile,
+                          child: authProvider.isLoading
+                              ? const CircularProgressIndicator()
+                              : const Text('Save'),
                         ),
                       ],
                     ),
@@ -167,87 +157,97 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               )
             else
-              StreamBuilder<DocumentSnapshot>(
-                stream: FirebaseFirestore.instance
-                    .collection('users')
-                    .doc(user?.uid)
-                    .snapshots(),
-                builder: (context, snapshot) {
-                  if (snapshot.hasError) {
-                    return Text('Error: ${snapshot.error}');
-                  }
-
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return Center(child: CircularProgressIndicator());
-                  }
-
-                  final userData = snapshot.data?.data() as Map<String, dynamic>?;
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      ListTile(
-                        leading: Icon(Icons.person),
-                        title: Text('Name'),
-                        subtitle: Text(userData?['name'] ?? 'Not set'),
-                      ),
-                      Divider(),
-                      ListTile(
-                        leading: Icon(Icons.email),
-                        title: Text('Email'),
-                        subtitle: Text(user?.email ?? 'Not set'),
-                      ),
-                      Divider(),
-                      ListTile(
-                        leading: Icon(Icons.calendar_today),
-                        title: Text('Member Since'),
-                        subtitle: Text(
-                          user?.metadata.creationTime?.toString() ?? 'Unknown',
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              ),
-            SizedBox(height: 32),
-            Text(
-              'Settings',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            SizedBox(height: 16),
-            SwitchListTile(
-              title: Text('Dark Mode'),
-              subtitle: Text('Toggle dark/light theme'),
-              value: themeProvider.isDarkMode,
-              onChanged: (value) => themeProvider.toggleTheme(),
-            ),
-            Divider(),
-            ListTile(
-              leading: Icon(Icons.logout, color: Colors.red),
-              title: Text('Logout', style: TextStyle(color: Colors.red)),
-              onTap: () async {
-                final confirmed = await showDialog<bool>(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: Text('Logout'),
-                    content: Text('Are you sure you want to logout?'),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context, false),
-                        child: Text('Cancel'),
-                      ),
-                      TextButton(
-                        onPressed: () => Navigator.pop(context, true),
-                        child: Text('Logout'),
-                      ),
-                    ],
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.email),
+                    title: const Text('Email'),
+                    subtitle: Text(userModel.email),
                   ),
-                );
+                  ListTile(
+                    leading: const Icon(Icons.group),
+                    title: const Text('Groups'),
+                    subtitle: Text('${userModel.groupIds.length} groups'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () {
+                      // Navigate to groups screen
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.mail),
+                    title: const Text('Invitations'),
+                    subtitle: Text('${userModel.invitationIds.length} pending invitations'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () {
+                      Navigator.pushNamed(context, '/invitations');
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.calendar_today),
+                    title: const Text('Member Since'),
+                    subtitle: Text(
+                      '${userModel.createdAt.day}/${userModel.createdAt.month}/${userModel.createdAt.year}',
+                    ),
+                  ),
+                  if (userModel.lastLogin != null)
+                    ListTile(
+                      leading: const Icon(Icons.access_time),
+                      title: const Text('Last Login'),
+                      subtitle: Text(
+                        '${userModel.lastLogin!.day}/${userModel.lastLogin!.month}/${userModel.lastLogin!.year}',
+                      ),
+                    ),
+                  const SizedBox(height: 16),
+                  Center(
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        setState(() {
+                          _isEditing = true;
+                        });
+                      },
+                      icon: const Icon(Icons.edit),
+                      label: const Text('Edit Profile'),
+                    ),
+                  ),
+                ],
+              ),
+            const SizedBox(height: 32),
+            Center(
+              child: ElevatedButton.icon(
+                onPressed: () async {
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: const Text('Logout'),
+                      content: const Text('Are you sure you want to logout?'),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: const Text('Cancel'),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          child: const Text('Logout'),
+                        ),
+                      ],
+                    ),
+                  );
 
-                if (confirmed == true && mounted) {
-                  await context.read<AppAuthProvider>().logout();
-                  Navigator.pushReplacementNamed(context, '/login');
-                }
-              },
+                  if (confirmed == true && mounted) {
+                    await authProvider.logout();
+                    if (mounted) {
+                      Navigator.pushReplacementNamed(context, '/login');
+                    }
+                  }
+                },
+                icon: const Icon(Icons.logout),
+                label: const Text('Logout'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: theme.colorScheme.error,
+                  foregroundColor: theme.colorScheme.onError,
+                ),
+              ),
             ),
           ],
         ),
