@@ -6,7 +6,7 @@ import 'package:split_app/providers/group_provider.dart';
 class AddMemberScreen extends StatefulWidget {
   final String groupId;
 
-  AddMemberScreen({required this.groupId});
+  const AddMemberScreen({super.key, required this.groupId});
 
   @override
   _AddMemberScreenState createState() => _AddMemberScreenState();
@@ -23,6 +23,20 @@ class _AddMemberScreenState extends State<AddMemberScreen> {
     super.dispose();
   }
 
+  String? _validateEmail(String? value) {
+    if (value == null || value.isEmpty) {
+      return 'Please enter an email address';
+    }
+    final emailRegex = RegExp(
+      r'^[a-zA-Z0-9.]+@[a-zA-Z0-9]+\.[a-zA-Z]+',
+      caseSensitive: false,
+    );
+    if (!emailRegex.hasMatch(value)) {
+      return 'Please enter a valid email address';
+    }
+    return null;
+  }
+
   Future<void> _addMember() async {
     if (_formKey.currentState!.validate()) {
       setState(() => _isLoading = true);
@@ -32,7 +46,10 @@ class _AddMemberScreenState extends State<AddMemberScreen> {
 
         if (authProvider.currentUserModel == null) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('User not logged in.')),
+            const SnackBar(
+              content: Text('User not logged in.'),
+              backgroundColor: Colors.red,
+            ),
           );
           setState(() => _isLoading = false);
           return;
@@ -47,18 +64,27 @@ class _AddMemberScreenState extends State<AddMemberScreen> {
 
         if (groupProvider.error != null) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(groupProvider.error!)),
+            SnackBar(
+              content: Text(groupProvider.error!),
+              backgroundColor: Colors.red,
+            ),
           );
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Invitation sent successfully!')),
+            const SnackBar(
+              content: Text('Invitation sent successfully!'),
+              backgroundColor: Colors.green,
+            ),
           );
           Navigator.pop(context);
         }
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(e.toString())),
+            SnackBar(
+              content: Text(e.toString()),
+              backgroundColor: Colors.red,
+            ),
           );
         }
       } finally {
@@ -69,72 +95,88 @@ class _AddMemberScreenState extends State<AddMemberScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    
     return Scaffold(
       appBar: AppBar(
         title: const Text('Invite Member'),
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        foregroundColor: Theme.of(context).colorScheme.onPrimary,
+        backgroundColor: theme.colorScheme.primary,
+        foregroundColor: theme.colorScheme.onPrimary,
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              TextFormField(
-                controller: _emailController,
-                decoration: InputDecoration(
-                  labelText: 'Member Email',
-                  hintText: 'Enter email of member to invite',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8.0),
-                  ),
-                  filled: true,
-                  fillColor: Theme.of(context).colorScheme.surfaceVariant,
-                ),
-                keyboardType: TextInputType.emailAddress,
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please enter an email address';
-                  }
-                  if (!RegExp(r"^[a-zA-Z0-9.a-zA-Z0-9.!#$%&'*+-/=?^_`{|}~]+@[a-zA-Z0-9]+\.[a-zA-Z]+")
-                      .hasMatch(value)) {
-                    return 'Please enter a valid email address';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 20),
-              Consumer<GroupProvider>(
-                builder: (context, groupProvider, child) {
-                  return ElevatedButton.icon(
-                    onPressed: groupProvider.isLoading ? null : _addMember,
-                    icon: groupProvider.isLoading
-                        ? const CircularProgressIndicator(color: Colors.white)
-                        : const Icon(Icons.person_add),
-                    label: Text(groupProvider.isLoading ? 'Sending Invitation...' : 'Send Invitation'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Theme.of(context).colorScheme.secondary,
-                      foregroundColor: Theme.of(context).colorScheme.onSecondary,
-                      padding: const EdgeInsets.symmetric(vertical: 12.0),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8.0),
-                      ),
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Card(
+                  elevation: 2,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Invite New Member',
+                          style: theme.textTheme.titleLarge,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Enter the email address of the person you want to invite to the group.',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: _emailController,
+                          decoration: InputDecoration(
+                            labelText: 'Email Address',
+                            hintText: 'Enter member\'s email',
+                            prefixIcon: const Icon(Icons.email),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8.0),
+                            ),
+                            filled: true,
+                            fillColor: theme.colorScheme.surfaceVariant,
+                          ),
+                          keyboardType: TextInputType.emailAddress,
+                          validator: _validateEmail,
+                          enabled: !_isLoading,
+                          textInputAction: TextInputAction.done,
+                          onFieldSubmitted: (_) => _addMember(),
+                        ),
+                      ],
                     ),
-                  );
-                },
-              ),
-              if (Provider.of<GroupProvider>(context).error != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 10),
-                  child: Text(
-                    Provider.of<GroupProvider>(context).error!,
-                    style: TextStyle(color: Theme.of(context).colorScheme.error),
-                    textAlign: TextAlign.center,
                   ),
                 ),
-            ],
+                const SizedBox(height: 20),
+                ElevatedButton.icon(
+                  onPressed: _isLoading ? null : _addMember,
+                  icon: _isLoading
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.person_add),
+                  label: Text(_isLoading ? 'Sending Invitation...' : 'Send Invitation'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: theme.colorScheme.primary,
+                    foregroundColor: theme.colorScheme.onPrimary,
+                    padding: const EdgeInsets.symmetric(vertical: 16.0),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8.0),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

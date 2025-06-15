@@ -16,13 +16,26 @@ class GroupMember {
   });
 
   factory GroupMember.fromMap(Map<String, dynamic> map) {
-    return GroupMember(
-      userId: map['userId'] ?? '',
-      username: map['username'] ?? '',
-      email: map['email'] ?? '',
-      isAdmin: map['isAdmin'] ?? false,
-      joinedAt: (map['joinedAt'] as Timestamp).toDate(),
-    );
+    try {
+      return GroupMember(
+        userId: map['userId']?.toString() ?? '',
+        username: map['username']?.toString() ?? 'Unknown User',
+        email: map['email']?.toString() ?? '',
+        isAdmin: map['isAdmin'] as bool? ?? false,
+        joinedAt: map['joinedAt'] != null 
+            ? (map['joinedAt'] as Timestamp).toDate()
+            : DateTime.now(),
+      );
+    } catch (e) {
+      print('Error parsing group member: $e');
+      return GroupMember(
+        userId: '',
+        username: 'Unknown User',
+        email: '',
+        isAdmin: false,
+        joinedAt: DateTime.now(),
+      );
+    }
   }
 
   Map<String, dynamic> toMap() {
@@ -56,16 +69,23 @@ class GroupModel {
     List<GroupMember> membersList = [];
     
     if (data['members'] != null) {
-      membersList = (data['members'] as List)
-          .map((member) => GroupMember.fromMap(member))
-          .toList();
+      try {
+        membersList = (data['members'] as List)
+            .map((member) => GroupMember.fromMap(member as Map<String, dynamic>))
+            .toList();
+      } catch (e) {
+        print('Error parsing members: $e');
+        membersList = [];
+      }
     }
 
     return GroupModel(
       id: doc.id,
-      name: data['name'] ?? '',
+      name: data['name'] ?? 'Unnamed Group',
       createdBy: data['createdBy'] ?? '',
-      createdAt: (data['createdAt'] as Timestamp).toDate(),
+      createdAt: data['createdAt'] != null 
+          ? (data['createdAt'] as Timestamp).toDate()
+          : DateTime.now(),
       members: membersList,
     );
   }

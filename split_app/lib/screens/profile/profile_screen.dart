@@ -224,7 +224,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   StreamBuilder<QuerySnapshot>(
                     stream: FirebaseFirestore.instance
-                        .collection('invitations')
+                        .collection('group_invitations')
                         .where('invitedUserId', isEqualTo: userModel.uid)
                         .where('status', isEqualTo: 'pending')
                         .snapshots(),
