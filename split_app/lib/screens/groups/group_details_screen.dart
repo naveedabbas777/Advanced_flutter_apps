@@ -147,7 +147,20 @@ class GroupDetailsScreen extends StatelessWidget {
                           spacing: 8.0,
                           children: groupMembers.map((member) {
                             return Chip(
-                              label: Text(member.username),
+                              label: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(member.username),
+                                  if (member.isAdmin) ...[
+                                    const SizedBox(width: 4),
+                                    Icon(
+                                      Icons.star,
+                                      size: 16,
+                                      color: Theme.of(context).colorScheme.primary,
+                                    ),
+                                  ],
+                                ],
+                              ),
                               avatar: CircleAvatar(
                                 child: Text(member.username.substring(0, 1).toUpperCase()),
                               ),
