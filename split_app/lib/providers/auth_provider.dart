@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:io'; // Import for SocketException
 // import 'package:http/http.dart' as http;
 // import 'dart:convert';
 
@@ -47,34 +48,38 @@ class AppAuthProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      // // Verify reCAPTCHA token
-      // final response = await http.post(
-      //   Uri.parse('https://www.google.com/recaptcha/api/siteverify'),
-      //   body: {
-      //     'secret': 'YOUR_RECAPTCHA_SECRET_KEY',
-      //     'response': recaptchaToken,
-      //   },
-      // );
-
-      // final responseData = json.decode(response.body);
-      // if (!responseData['success']) {
-      //   throw 'reCAPTCHA verification failed';
-      // }
-
-      // Create user account
+      if (password.length < 6) {
+        throw 'Password should be at least 6 characters.';
+      }
       final userCredential = await _auth.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
-
-      // Create user document in Firestore
       await FirebaseFirestore.instance.collection('users').doc(userCredential.user!.uid).set({
         'name': name,
         'email': email,
         'createdAt': FieldValue.serverTimestamp(),
       });
+    } on FirebaseAuthException catch (e) {
+      String errorMessage;
+      switch (e.code) {
+        case 'weak-password':
+          errorMessage = 'The password provided is too weak.';
+          break;
+        case 'email-already-in-use':
+          errorMessage = 'The account already exists for that email.';
+          break;
+        case 'invalid-email':
+          errorMessage = 'The email address is not valid.';
+          break;
+        default:
+          errorMessage = 'An unknown error occurred during registration. Please try again.';
+      }
+      throw errorMessage;
+    } on SocketException catch (_) {
+      throw 'No internet connection. Please check your network and try again.';
     } catch (e) {
-      rethrow;
+      throw 'Failed to register: ${e.toString()}';
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -86,26 +91,36 @@ class AppAuthProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      // // Verify reCAPTCHA token
-      // final response = await http.post(
-      //   Uri.parse('https://www.google.com/recaptcha/api/siteverify'),
-      //   body: {
-      //     'secret': 'YOUR_RECAPTCHA_SECRET_KEY',
-      //     'response': recaptchaToken,
-      //   },
-      // );
-
-      // final responseData = json.decode(response.body);
-      // if (!responseData['success']) {
-      //   throw 'reCAPTCHA verification failed';
-      // }
-
+      if (password.length < 6) {
+        throw 'Password should be at least 6 characters.';
+      }
       await _auth.signInWithEmailAndPassword(
         email: email,
         password: password,
       );
+    } on FirebaseAuthException catch (e) {
+      String errorMessage;
+      switch (e.code) {
+        case 'user-not-found':
+          errorMessage = 'No user found for that email.';
+          break;
+        case 'wrong-password':
+          errorMessage = 'Wrong password provided for that user.';
+          break;
+        case 'invalid-email':
+          errorMessage = 'The email address is not valid.';
+          break;
+        case 'user-disabled':
+          errorMessage = 'This user account has been disabled.';
+          break;
+        default:
+          errorMessage = 'An unknown error occurred during login. Please try again.';
+      }
+      throw errorMessage;
+    } on SocketException catch (_) {
+      throw 'No internet connection. Please check your network and try again.';
     } catch (e) {
-      rethrow;
+      throw 'Failed to login: ${e.toString()}';
     } finally {
       _isLoading = false;
       notifyListeners();

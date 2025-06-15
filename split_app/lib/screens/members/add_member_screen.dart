@@ -1,33 +1,39 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../providers/group_provider.dart';
 
-class CreateGroupScreen extends StatefulWidget {
+class AddMemberScreen extends StatefulWidget {
+  final String groupId;
+
+  AddMemberScreen({required this.groupId});
+
   @override
-  _CreateGroupScreenState createState() => _CreateGroupScreenState();
+  _AddMemberScreenState createState() => _AddMemberScreenState();
 }
 
-class _CreateGroupScreenState extends State<CreateGroupScreen> {
+class _AddMemberScreenState extends State<AddMemberScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
+  final _emailController = TextEditingController();
 
   @override
   void dispose() {
-    _nameController.dispose();
+    _emailController.dispose();
     super.dispose();
   }
 
-  Future<void> _createGroup() async {
+  Future<void> _sendInvitation() async {
     if (_formKey.currentState!.validate()) {
       try {
-        await context.read<GroupProvider>().createGroup(
-              _nameController.text.trim(),
+        await context.read<GroupProvider>().sendGroupInvitation(
+              groupId: widget.groupId,
+              memberEmail: _emailController.text.trim(),
             );
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Group created successfully!')),
+            SnackBar(content: Text('Invitation sent successfully!')),
           );
-          Navigator.pop(context); // Go back to home screen
+          Navigator.pop(context);
         }
       } catch (e) {
         if (mounted) {
@@ -45,7 +51,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Create New Group'),
+        title: Text('Invite Member'),
       ),
       body: Center(
         child: SingleChildScrollView(
@@ -57,27 +63,31 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text(
-                  'New Group Details',
+                  'Invite New Member to Group',
                   style: Theme.of(context).textTheme.titleLarge,
                   textAlign: TextAlign.center,
                 ),
                 SizedBox(height: 30),
                 TextFormField(
-                  controller: _nameController,
+                  controller: _emailController,
                   decoration: InputDecoration(
-                    labelText: 'Group Name',
-                    prefixIcon: Icon(Icons.group),
+                    labelText: 'Member Email',
+                    prefixIcon: Icon(Icons.email),
                   ),
+                  keyboardType: TextInputType.emailAddress,
                   validator: (value) {
                     if (value == null || value.isEmpty) {
-                      return 'Please enter a group name';
+                      return 'Please enter member\'s email';
+                    }
+                    if (!value.contains('@')) {
+                      return 'Please enter a valid email';
                     }
                     return null;
                   },
                 ),
                 SizedBox(height: 24),
                 ElevatedButton(
-                  onPressed: groupProvider.isLoading ? null : _createGroup,
+                  onPressed: groupProvider.isLoading ? null : _sendInvitation,
                   child: groupProvider.isLoading
                       ? SizedBox(
                           height: 20,
@@ -87,7 +97,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                             valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                           ),
                         )
-                      : Text('Create Group'),
+                      : Text('Send Invitation'),
                 ),
               ],
             ),

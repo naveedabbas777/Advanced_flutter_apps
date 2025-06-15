@@ -11,6 +11,8 @@ import 'screens/groups/group_details_screen.dart';
 import 'screens/expenses/add_expense_screen.dart';
 import 'screens/groups/add_member_screen.dart';
 import 'screens/profile/profile_screen.dart';
+import 'screens/invitations/invitations_screen.dart';
+import 'providers/group_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -39,12 +41,15 @@ class MyApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => AppAuthProvider()),
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        ChangeNotifierProvider(create: (_) => GroupProvider()),
       ],
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, child) {
           return MaterialApp(
             title: 'Split App',
-            theme: themeProvider.currentTheme,
+            theme: ThemeProvider.lightTheme,
+            darkTheme: ThemeProvider.darkTheme,
+            themeMode: themeProvider.themeMode,
             home: Consumer<AppAuthProvider>(
               builder: (context, authProvider, child) {
                 if (authProvider.isLoading) {
@@ -69,6 +74,8 @@ class MyApp extends StatelessWidget {
                   return MaterialPageRoute(builder: (_) => RegisterScreen());
                 case '/profile':
                   return MaterialPageRoute(builder: (_) => ProfileScreen());
+                case '/invitations':
+                  return MaterialPageRoute(builder: (_) => InvitationsScreen());
                 case '/group-details':
                   final args = settings.arguments as Map<String, dynamic>;
                   return MaterialPageRoute(
@@ -101,6 +108,7 @@ class MyApp extends StatelessWidget {
                   );
               }
             },
+            debugShowCheckedModeBanner: false,
           );
         },
       ),
