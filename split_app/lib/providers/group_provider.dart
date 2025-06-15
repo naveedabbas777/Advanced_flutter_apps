@@ -334,7 +334,7 @@ class GroupProvider extends ChangeNotifier {
         'notes': notes,
         'splitType': splitType,
         'splitData': splitData,
-        'createdAt': FieldValue.serverTimestamp(),
+        'timestamp': FieldValue.serverTimestamp(),
       });
 
       _isLoading = false;
@@ -344,5 +344,105 @@ class GroupProvider extends ChangeNotifier {
       _error = 'Failed to add expense: \$e';
       notifyListeners();
     }
+  }
+
+  Future<Map<String, double>> calculateGroupBalances(String groupId, List<GroupMember> members) async {
+    Map<String, double> balances = {};
+    // Initialize all members with a balance of 0
+    for (var member in members) {
+      balances[member.userId] = 0.0;
+    }
+
+    try {
+      final expensesSnapshot = await _firestore
+          .collection('groups')
+          .doc(groupId)
+          .collection('expenses')
+          .get();
+
+      for (var expenseDoc in expensesSnapshot.docs) {
+        var expenseData = expenseDoc.data() as Map<String, dynamic>;
+        double amount = (expenseData['amount'] as num?)?.toDouble() ?? 0.0;
+        String paidBy = expenseData['paidBy']?.toString() ?? '';
+        String splitType = expenseData['splitType']?.toString() ?? 'equal';
+        dynamic splitData = expenseData['splitData'];
+
+        // The person who paid reduces their balance by the total amount
+        balances[paidBy] = (balances[paidBy] ?? 0.0) + amount;
+
+        if (splitType == 'equal') {
+          final List<String> splitAmong = List<String>.from(splitData ?? []);
+          final numSplitMembers = splitAmong.length;
+          final individualShare = numSplitMembers > 0 ? amount / numSplitMembers : 0.0;
+
+          for (var memberId in splitAmong) {
+            balances[memberId] = (balances[memberId] ?? 0.0) - individualShare;
+          }
+        } else if (splitType == 'custom' && splitData is Map<String, dynamic>) {
+          splitData.forEach((memberId, value) {
+            if (value != null) {
+              final share = (value as num).toDouble();
+              balances[memberId] = (balances[memberId] ?? 0.0) - share;
+            }
+          });
+        }
+      }
+    } catch (e) {
+      print('Error calculating group balances: $e');
+      // Optionally, set an error state or return empty balances
+    }
+    return balances;
+  }
+
+  Future<void> deleteGroup(String groupId, String userId) async {
+    try {
+      _setLoading(true);
+      _error = null;
+
+      // Get group data
+      final groupDoc = await _firestore.collection('groups').doc(groupId).get();
+      final group = GroupModel.fromFirestore(groupDoc);
+
+      // Check if user is admin
+      final user = group.members.firstWhere(
+        (member) => member.userId == userId,
+        orElse: () => throw 'You are not a member of this group',
+      );
+
+      if (!user.isAdmin) {
+        throw 'Only group admins can delete the group';
+      }
+
+      // Delete all expenses
+      final expensesSnapshot = await _firestore
+          .collection('groups')
+          .doc(groupId)
+          .collection('expenses')
+          .get();
+      
+      for (var doc in expensesSnapshot.docs) {
+        await doc.reference.delete();
+      }
+
+      // Remove group from all members' groupIds
+      for (var member in group.members) {
+        await _firestore.collection('users').doc(member.userId).update({
+          'groupIds': FieldValue.arrayRemove([groupId]),
+        });
+      }
+
+      // Delete the group document
+      await _firestore.collection('groups').doc(groupId).delete();
+
+      _setLoading(false);
+    } catch (e) {
+      _setLoading(false);
+      _error = 'Failed to delete group: $e';
+      notifyListeners();
+    }
+  }
+
+  bool isUserAdmin(String userId, List<GroupMember> members) {
+    return members.any((member) => member.userId == userId && member.isAdmin);
   }
 } 
