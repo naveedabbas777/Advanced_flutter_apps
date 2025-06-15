@@ -82,19 +82,25 @@ class InvitationsScreen extends StatelessWidget {
                         style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 8),
-                      FutureBuilder<DocumentSnapshot>(
-                        future: FirebaseFirestore.instance.collection('users').doc(invitedByUserId).get(),
-                        builder: (context, userSnapshot) {
-                          String invitedByName = 'Unknown';
-                          if (userSnapshot.hasData && userSnapshot.data!.exists) {
-                            invitedByName = userSnapshot.data!['name'] ?? userSnapshot.data!['email'] ?? 'Unknown';
-                          }
-                          return Text(
-                            'Invited by: $invitedByName',
-                            style: Theme.of(context).textTheme.bodyMedium,
-                          );
-                        },
-                      ),
+                      if (invitedByUserId.isNotEmpty)
+                        FutureBuilder<DocumentSnapshot>(
+                          future: FirebaseFirestore.instance.collection('users').doc(invitedByUserId).get(),
+                          builder: (context, userSnapshot) {
+                            String invitedByName = 'Unknown';
+                            if (userSnapshot.hasData && userSnapshot.data!.exists) {
+                              invitedByName = userSnapshot.data!['username'] ?? userSnapshot.data!['email'] ?? 'Unknown';
+                            }
+                            return Text(
+                              'Invited by: $invitedByName',
+                              style: Theme.of(context).textTheme.bodyMedium,
+                            );
+                          },
+                        )
+                      else
+                        Text(
+                          'Invited by: Unknown User', // Fallback for empty invitedByUserId
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
                       const SizedBox(height: 16),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.end,
