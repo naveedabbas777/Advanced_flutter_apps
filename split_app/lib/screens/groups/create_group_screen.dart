@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../providers/group_provider.dart';
+import 'package:split_app/providers/auth_provider.dart';
+import 'package:split_app/providers/group_provider.dart';
 
 class CreateGroupScreen extends StatefulWidget {
   @override
@@ -9,32 +10,40 @@ class CreateGroupScreen extends StatefulWidget {
 
 class _CreateGroupScreenState extends State<CreateGroupScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
+  final _groupNameController = TextEditingController();
 
   @override
   void dispose() {
-    _nameController.dispose();
+    _groupNameController.dispose();
     super.dispose();
   }
 
   Future<void> _createGroup() async {
     if (_formKey.currentState!.validate()) {
-      try {
-        await context.read<GroupProvider>().createGroup(
-              _nameController.text.trim(),
-            );
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Group created successfully!')),
-          );
-          Navigator.pop(context); // Go back to home screen
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(e.toString())),
-          );
-        }
+      final authProvider = Provider.of<AppAuthProvider>(context, listen: false);
+      final groupProvider = Provider.of<GroupProvider>(context, listen: false);
+
+      if (authProvider.currentUserModel == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('User not logged in.')),
+        );
+        return;
+      }
+
+      await groupProvider.createGroup(
+        _groupNameController.text,
+        authProvider.currentUserModel!,
+      );
+
+      if (groupProvider.error != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(groupProvider.error!)),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Group created successfully!')),
+        );
+        Navigator.of(context).pop(); // Go back to the previous screen
       }
     }
   }
@@ -45,52 +54,61 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Create New Group'),
+        title: const Text('Create New Group'),
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        foregroundColor: Theme.of(context).colorScheme.onPrimary,
       ),
-      body: Center(
-        child: SingleChildScrollView(
-          padding: EdgeInsets.all(24.0),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  'New Group Details',
-                  style: Theme.of(context).textTheme.titleLarge,
-                  textAlign: TextAlign.center,
-                ),
-                SizedBox(height: 30),
-                TextFormField(
-                  controller: _nameController,
-                  decoration: InputDecoration(
-                    labelText: 'Group Name',
-                    prefixIcon: Icon(Icons.group),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextFormField(
+                controller: _groupNameController,
+                decoration: InputDecoration(
+                  labelText: 'Group Name',
+                  hintText: 'Enter the group name',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8.0),
                   ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter a group name';
-                    }
-                    return null;
-                  },
+                  filled: true,
+                  fillColor: Theme.of(context).colorScheme.surfaceVariant,
                 ),
-                SizedBox(height: 24),
-                ElevatedButton(
-                  onPressed: groupProvider.isLoading ? null : _createGroup,
-                  child: groupProvider.isLoading
-                      ? SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                          ),
-                        )
-                      : Text('Create Group'),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Please enter a group name';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 20),
+              ElevatedButton.icon(
+                onPressed: groupProvider.isLoading ? null : _createGroup,
+                icon: groupProvider.isLoading
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : const Icon(Icons.add_circle),
+                label: Text(groupProvider.isLoading ? 'Creating...' : 'Create Group'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Theme.of(context).colorScheme.secondary,
+                  foregroundColor: Theme.of(context).colorScheme.onSecondary,
+                  padding: const EdgeInsets.symmetric(vertical: 12.0),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8.0),
+                  ),
                 ),
-              ],
-            ),
+              ),
+              if (groupProvider.error != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: Text(
+                    groupProvider.error!,
+                    style: TextStyle(color: Theme.of(context).colorScheme.error),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+            ],
           ),
         ),
       ),

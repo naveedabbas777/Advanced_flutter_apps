@@ -143,6 +143,8 @@ class MyApp extends StatelessWidget {
                           groupId: args['groupId'] as String,
                         ),
                       );
+                    case '/create-group':
+                      return MaterialPageRoute(builder: (_) => CreateGroupScreen());
                     default:
                       return MaterialPageRoute(
                         builder: (_) => Scaffold(

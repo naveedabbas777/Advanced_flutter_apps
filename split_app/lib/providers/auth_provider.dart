@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:io'; // Import for SocketException
 import 'package:firebase_messaging/firebase_messaging.dart'; // Import Firebase Messaging
 import '../models/user_model.dart';
+import 'dart:async'; // Import for StreamSubscription
 // import 'package:http/http.dart' as http;
 // import 'dart:convert';
 
@@ -14,9 +15,11 @@ class AppAuthProvider extends ChangeNotifier {
   UserModel? _userModel;
   bool _isLoading = false;
   String? _error;
+  StreamSubscription<DocumentSnapshot>? _userSubscription;
 
   User? get currentUser => _user;
   UserModel? get userModel => _userModel;
+  UserModel? get currentUserModel => _userModel;
   bool get isLoading => _isLoading;
   String? get error => _error;
   bool get isEmailVerified => _user?.emailVerified ?? false;
@@ -25,26 +28,27 @@ class AppAuthProvider extends ChangeNotifier {
     _auth.authStateChanges().listen((User? user) async {
       _user = user;
       if (user != null) {
-        await _loadUserData();
+        await _setupUserListener();
       } else {
         _userModel = null;
+        _userSubscription?.cancel();
       }
       notifyListeners();
     });
   }
 
-  Future<void> _loadUserData() async {
+  Future<void> _setupUserListener() async {
     if (_user == null) return;
 
-    try {
-      final doc = await _firestore.collection('users').doc(_user!.uid).get();
+    _userSubscription?.cancel();
+    _userSubscription = _firestore.collection('users').doc(_user!.uid).snapshots().listen((doc) {
       if (doc.exists) {
         _userModel = UserModel.fromFirestore(doc);
+      } else {
+        _userModel = null;
       }
       notifyListeners();
-    } catch (e) {
-      print('Error loading user data: $e');
-    }
+    });
   }
 
   Future<void> register(String email, String password, String username) async {
@@ -156,7 +160,7 @@ class AppAuthProvider extends ChangeNotifier {
       });
 
       // Load user data
-      await _loadUserData();
+      await _setupUserListener();
 
       _isLoading = false;
       notifyListeners();
@@ -217,7 +221,7 @@ class AppAuthProvider extends ChangeNotifier {
 
       if (updates.isNotEmpty) {
         await _firestore.collection('users').doc(_user!.uid).update(updates);
-        await _loadUserData(); // Reload user data
+        await _setupUserListener();
       }
 
       _isLoading = false;
@@ -237,7 +241,7 @@ class AppAuthProvider extends ChangeNotifier {
         'groupIds': FieldValue.arrayUnion([groupId]),
       });
 
-      await _loadUserData();
+      await _setupUserListener();
     } catch (e) {
       print('Error adding group to user: $e');
     }
@@ -251,7 +255,7 @@ class AppAuthProvider extends ChangeNotifier {
         'groupIds': FieldValue.arrayRemove([groupId]),
       });
 
-      await _loadUserData();
+      await _setupUserListener();
     } catch (e) {
       print('Error removing group from user: $e');
     }
@@ -265,7 +269,7 @@ class AppAuthProvider extends ChangeNotifier {
         'invitationIds': FieldValue.arrayUnion([invitationId]),
       });
 
-      await _loadUserData();
+      await _setupUserListener();
     } catch (e) {
       print('Error adding invitation to user: $e');
     }
@@ -279,7 +283,7 @@ class AppAuthProvider extends ChangeNotifier {
         'invitationIds': FieldValue.arrayRemove([invitationId]),
       });
 
-      await _loadUserData();
+      await _setupUserListener();
     } catch (e) {
       print('Error removing invitation from user: $e');
     }
@@ -293,6 +297,7 @@ class AppAuthProvider extends ChangeNotifier {
 
       await _auth.signOut();
       _userModel = null;
+      _userSubscription?.cancel();
       _isLoading = false;
       notifyListeners();
     } catch (e) {

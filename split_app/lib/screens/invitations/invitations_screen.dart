@@ -102,10 +102,10 @@ class InvitationsScreen extends StatelessWidget {
                           ElevatedButton.icon(
                             onPressed: () async {
                               try {
-                                await context.read<GroupProvider>().acceptGroupInvitation(
-                                      invitationId,
-                                      groupId,
-                                      user.uid,
+                                await context.read<GroupProvider>().acceptInvitation(
+                                      invitationId: invitationId,
+                                      groupId: groupId,
+                                      user: authProvider.currentUserModel!,
                                     );
                                 if (context.mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
@@ -131,7 +131,11 @@ class InvitationsScreen extends StatelessWidget {
                           OutlinedButton.icon(
                             onPressed: () async {
                               try {
-                                await context.read<GroupProvider>().rejectGroupInvitation(invitationId);
+                                await context.read<GroupProvider>().rejectInvitation(
+                                      invitationId: invitationId,
+                                      groupId: groupId,
+                                      userId: user.uid,
+                                    );
                                 if (context.mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(content: Text('Invitation rejected.')),

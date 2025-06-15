@@ -51,6 +51,7 @@ dependencies:
   # webview_flutter: ^4.4.2
   # http: ^1.1.0
   firebase_messaging: ^14.7.10
+  rxdart: ^0.28.0
 
 dev_dependencies:
   flutter_test:

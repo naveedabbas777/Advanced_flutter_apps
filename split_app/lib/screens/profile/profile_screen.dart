@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/theme_provider.dart';
+import '../../providers/group_provider.dart';
+import '../../models/group_model.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -165,24 +168,104 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     title: const Text('Email'),
                     subtitle: Text(userModel.email),
                   ),
+                  Divider(),
                   ListTile(
                     leading: const Icon(Icons.group),
-                    title: const Text('Groups'),
-                    subtitle: Text('${userModel.groupIds.length} groups'),
+                    title: const Text('My Groups'),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () {
-                      // Navigate to groups screen
+                      // Navigate to a screen showing group details if needed
                     },
                   ),
+                  StreamBuilder<List<GroupModel>>(
+                    stream: Provider.of<GroupProvider>(context, listen: false).getUserGroupsStream(userModel.uid),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      if (snapshot.hasError) {
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                          child: Text('Error loading groups: ${snapshot.error}', style: TextStyle(color: Colors.red)),
+                        );
+                      }
+                      if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                        return const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 16.0),
+                          child: Text('No groups joined yet.'),
+                        );
+                      }
+                      return ListView.builder(
+                        shrinkWrap: true,
+                        physics: NeverScrollableScrollPhysics(),
+                        itemCount: snapshot.data!.length,
+                        itemBuilder: (context, index) {
+                          final group = snapshot.data![index];
+                          return ListTile(
+                            title: Text(group.name),
+                            subtitle: Text('Members: ${group.members.length}'),
+                            onTap: () {
+                              // Navigate to group details screen
+                              Navigator.pushNamed(context, '/group-details', arguments: {'groupId': group.id, 'groupName': group.name});
+                            },
+                          );
+                        },
+                      );
+                    },
+                  ),
+                  Divider(),
                   ListTile(
                     leading: const Icon(Icons.mail),
-                    title: const Text('Invitations'),
-                    subtitle: Text('${userModel.invitationIds.length} pending invitations'),
+                    title: const Text('Pending Invitations'),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () {
                       Navigator.pushNamed(context, '/invitations');
                     },
                   ),
+                  StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collection('invitations')
+                        .where('invitedUserId', isEqualTo: userModel.uid)
+                        .where('status', isEqualTo: 'pending')
+                        .snapshots(),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      if (snapshot.hasError) {
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                          child: Text('Error loading invitations: ${snapshot.error}', style: TextStyle(color: Colors.red)),
+                        );
+                      }
+                      if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                        return const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 16.0),
+                          child: Text('No pending invitations.'),
+                        );
+                      }
+                      return ListView.builder(
+                        shrinkWrap: true,
+                        physics: NeverScrollableScrollPhysics(),
+                        itemCount: snapshot.data!.docs.length,
+                        itemBuilder: (context, index) {
+                          final invitation = snapshot.data!.docs[index];
+                          final invitationData = invitation.data() as Map<String, dynamic>;
+                          final groupName = invitationData['groupName'] ?? 'Unnamed Group';
+                          final invitedByUsername = invitationData['invitedByUsername'] ?? 'Unknown';
+
+                          return ListTile(
+                            title: Text('Join: $groupName'),
+                            subtitle: Text('Invited by: $invitedByUsername'),
+                            onTap: () {
+                              Navigator.pushNamed(context, '/invitations');
+                            },
+                          );
+                        },
+                      );
+                    },
+                  ),
+                  Divider(),
                   ListTile(
                     leading: const Icon(Icons.calendar_today),
                     title: const Text('Member Since'),
