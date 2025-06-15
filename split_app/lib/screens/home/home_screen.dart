@@ -15,12 +15,6 @@ class HomeScreen extends StatelessWidget {
         title: Text('Split App'),
         actions: [
           IconButton(
-            icon: Icon(Icons.brightness_6),
-            onPressed: () {
-              context.read<ThemeProvider>().toggleTheme();
-            },
-          ),
-          IconButton(
             icon: Icon(Icons.person),
             onPressed: () {
               Navigator.pushNamed(context, '/profile');

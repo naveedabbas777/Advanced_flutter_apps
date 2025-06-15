@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
+// import 'package:http/http.dart' as http;
+// import 'dart:convert';
 
-class AppAuthProvider extends ChangeNotifier {
+class AppAuthProvider with ChangeNotifier {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   User? _user;
@@ -42,42 +42,24 @@ class AppAuthProvider extends ChangeNotifier {
     }
   }
 
-  Future<bool> _verifyRecaptcha(String token) async {
-    try {
-      final response = await http.post(
-        Uri.parse('https://www.google.com/recaptcha/api/siteverify'),
-        body: {
-          'secret': 'YOUR_RECAPTCHA_SECRET_KEY', // Replace with your secret key
-          'response': token,
-        },
-      );
-
-      final data = json.decode(response.body);
-      return data['success'] as bool;
-    } catch (e) {
-      print('Error verifying reCAPTCHA: $e');
-      return false;
-    }
-  }
-
-  Future<void> register(String email, String password, String name, String recaptchaToken) async {
+  Future<void> register(String email, String password, String name) async {
     _isLoading = true;
     notifyListeners();
 
     try {
-      // Verify reCAPTCHA token
-      final response = await http.post(
-        Uri.parse('https://www.google.com/recaptcha/api/siteverify'),
-        body: {
-          'secret': 'YOUR_RECAPTCHA_SECRET_KEY',
-          'response': recaptchaToken,
-        },
-      );
+      // // Verify reCAPTCHA token
+      // final response = await http.post(
+      //   Uri.parse('https://www.google.com/recaptcha/api/siteverify'),
+      //   body: {
+      //     'secret': 'YOUR_RECAPTCHA_SECRET_KEY',
+      //     'response': recaptchaToken,
+      //   },
+      // );
 
-      final responseData = json.decode(response.body);
-      if (!responseData['success']) {
-        throw 'reCAPTCHA verification failed';
-      }
+      // final responseData = json.decode(response.body);
+      // if (!responseData['success']) {
+      //   throw 'reCAPTCHA verification failed';
+      // }
 
       // Create user account
       final userCredential = await _auth.createUserWithEmailAndPassword(
@@ -99,24 +81,24 @@ class AppAuthProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> login(String email, String password, String recaptchaToken) async {
+  Future<void> login(String email, String password) async {
     _isLoading = true;
     notifyListeners();
 
     try {
-      // Verify reCAPTCHA token
-      final response = await http.post(
-        Uri.parse('https://www.google.com/recaptcha/api/siteverify'),
-        body: {
-          'secret': 'YOUR_RECAPTCHA_SECRET_KEY',
-          'response': recaptchaToken,
-        },
-      );
+      // // Verify reCAPTCHA token
+      // final response = await http.post(
+      //   Uri.parse('https://www.google.com/recaptcha/api/siteverify'),
+      //   body: {
+      //     'secret': 'YOUR_RECAPTCHA_SECRET_KEY',
+      //     'response': recaptchaToken,
+      //   },
+      // );
 
-      final responseData = json.decode(response.body);
-      if (!responseData['success']) {
-        throw 'reCAPTCHA verification failed';
-      }
+      // final responseData = json.decode(response.body);
+      // if (!responseData['success']) {
+      //   throw 'reCAPTCHA verification failed';
+      // }
 
       await _auth.signInWithEmailAndPassword(
         email: email,
