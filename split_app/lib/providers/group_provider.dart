@@ -346,51 +346,46 @@ class GroupProvider extends ChangeNotifier {
     }
   }
 
-  Future<Map<String, double>> calculateGroupBalances(String groupId, List<GroupMember> members) async {
+  Future<Map<String, double>> calculateGroupBalances(
+      String groupId, List<GroupMember> groupMembers) async {
     Map<String, double> balances = {};
-    // Initialize all members with a balance of 0
-    for (var member in members) {
+
+    // Initialize balances for all group members to 0
+    for (var member in groupMembers) {
       balances[member.userId] = 0.0;
     }
 
-    try {
-      final expensesSnapshot = await _firestore
-          .collection('groups')
-          .doc(groupId)
-          .collection('expenses')
-          .get();
+    final expenseSnapshot = await _firestore
+        .collection('groups')
+        .doc(groupId)
+        .collection('expenses')
+        .get();
 
-      for (var expenseDoc in expensesSnapshot.docs) {
-        var expenseData = expenseDoc.data() as Map<String, dynamic>;
-        double amount = (expenseData['amount'] as num?)?.toDouble() ?? 0.0;
-        String paidBy = expenseData['paidBy']?.toString() ?? '';
-        String splitType = expenseData['splitType']?.toString() ?? 'equal';
-        dynamic splitData = expenseData['splitData'];
+    for (var doc in expenseSnapshot.docs) {
+      final data = doc.data();
+      final String paidBy = data['paidBy'];
+      final double amount = (data['amount'] as num).toDouble();
+      final String splitType = data['splitType'] ?? 'equal'; // Default to 'equal'
 
-        // The person who paid reduces their balance by the total amount
-        balances[paidBy] = (balances[paidBy] ?? 0.0) + amount;
+      // Add the full amount to the person who paid
+      balances[paidBy] = (balances[paidBy] ?? 0.0) + amount;
 
-        if (splitType == 'equal') {
-          final List<String> splitAmong = List<String>.from(splitData ?? []);
-          final numSplitMembers = splitAmong.length;
-          final individualShare = numSplitMembers > 0 ? amount / numSplitMembers : 0.0;
-
+      if (splitType == 'equal') {
+        final List<dynamic> splitAmong = data['splitAmong'] ?? [];
+        if (splitAmong.isNotEmpty) {
+          final double share = amount / splitAmong.length;
           for (var memberId in splitAmong) {
-            balances[memberId] = (balances[memberId] ?? 0.0) - individualShare;
+            balances[memberId.toString()] = (balances[memberId.toString()] ?? 0.0) - share;
           }
-        } else if (splitType == 'custom' && splitData is Map<String, dynamic>) {
-          splitData.forEach((memberId, value) {
-            if (value != null) {
-              final share = (value as num).toDouble();
-              balances[memberId] = (balances[memberId] ?? 0.0) - share;
-            }
-          });
         }
+      } else if (splitType == 'custom') {
+        final Map<String, dynamic> customSplitAmounts = data['customSplitAmounts'] ?? {};
+        customSplitAmounts.forEach((userId, customAmount) {
+          balances[userId] = (balances[userId] ?? 0.0) - (customAmount as num).toDouble();
+        });
       }
-    } catch (e) {
-      print('Error calculating group balances: $e');
-      // Optionally, set an error state or return empty balances
     }
+
     return balances;
   }
 

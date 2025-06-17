@@ -153,10 +153,13 @@ class GroupDetailsScreen extends StatelessWidget {
                                   Text(member.username),
                                   if (member.isAdmin) ...[
                                     const SizedBox(width: 4),
-                                    Icon(
-                                      Icons.star,
-                                      size: 16,
-                                      color: Theme.of(context).colorScheme.primary,
+                                    Text(
+                                      'Admin',
+                                      style: TextStyle(
+                                        color: Theme.of(context).colorScheme.primary,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                      ),
                                     ),
                                   ],
                                 ],
@@ -397,41 +400,134 @@ class GroupDetailsScreen extends StatelessWidget {
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(10),
                               ),
-                              child: ListTile(
-                                title: Text(description),
-                                subtitle: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text('Paid by: $paidByUsername'),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      'Date: ${timestamp.toDate().toLocal().day}/${timestamp.toDate().toLocal().month}/${timestamp.toDate().toLocal().year}',
-                                      style: Theme.of(context).textTheme.bodySmall,
-                                    ),
-                                    if (expenseData['notes'] != null &&
-                                        expenseData['notes'].isNotEmpty)
-                                      Padding(
-                                        padding: const EdgeInsets.only(top: 4.0),
-                                        child: Text(
-                                          'Notes: ${expenseData['notes']}',
-                                          style: Theme.of(context).textTheme.bodySmall,
-                                        ),
+                              child: splitType == 'custom'
+                                  ? ExpansionTile(
+                                      title: Text(description),
+                                      subtitle: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text('Paid by: $paidByUsername'),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            'Date: ${timestamp.toDate().toLocal().day}/${timestamp.toDate().toLocal().month}/${timestamp.toDate().toLocal().year}',
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodySmall,
+                                          ),
+                                          if (expenseData['notes'] != null &&
+                                              expenseData['notes'].isNotEmpty)
+                                            Padding(
+                                              padding: const EdgeInsets.only(
+                                                  top: 4.0),
+                                              child: Text(
+                                                'Notes: ${expenseData['notes']}',
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .bodySmall,
+                                              ),
+                                            ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            'Split: $splitInfo',
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodySmall,
+                                          ),
+                                        ],
                                       ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      'Split: $splitInfo',
-                                      style: Theme.of(context).textTheme.bodySmall,
+                                      trailing: Text(
+                                        '\$' + amount.toStringAsFixed(2),
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleMedium,
+                                      ),
+                                      children: [
+                                        Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 16.0, vertical: 8.0),
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                'Custom Split Details:',
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .bodyMedium
+                                                    ?.copyWith(
+                                                        fontWeight:
+                                                            FontWeight.bold),
+                                              ),
+                                              const SizedBox(height: 8),
+                                              ...splitData.entries.map<Widget>((entry) {
+                                                final memberName = group.members
+                                                    .firstWhere((m) =>
+                                                        m.userId == entry.key,
+                                                        orElse: () => GroupMember(userId: entry.key, username: 'Unknown', email: 'unknown@example.com', isAdmin: false, joinedAt: Timestamp.now()))
+                                                    .username;
+                                                return Padding(
+                                                  padding: const EdgeInsets.symmetric(
+                                                      vertical: 2.0),
+                                                  child: Row(
+                                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                    children: [
+                                                      Text(memberName),
+                                                      Text('\$${(entry.value as double).toStringAsFixed(2)}'),
+                                                    ],
+                                                  ),
+                                                );
+                                              }).toList(),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    )
+                                  : ListTile(
+                                      title: Text(description),
+                                      subtitle: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text('Paid by: $paidByUsername'),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            'Date: ${timestamp.toDate().toLocal().day}/${timestamp.toDate().toLocal().month}/${timestamp.toDate().toLocal().year}',
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodySmall,
+                                          ),
+                                          if (expenseData['notes'] != null &&
+                                              expenseData['notes'].isNotEmpty)
+                                            Padding(
+                                              padding: const EdgeInsets.only(
+                                                  top: 4.0),
+                                              child: Text(
+                                                'Notes: ${expenseData['notes']}',
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .bodySmall,
+                                              ),
+                                            ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            'Split: $splitInfo',
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodySmall,
+                                          ),
+                                        ],
+                                      ),
+                                      trailing: Text(
+                                        '\$' + amount.toStringAsFixed(2),
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleMedium,
+                                      ),
+                                      onTap: () {
+                                        // TODO: Navigate to expense details or edit screen
+                                      },
                                     ),
-                                  ],
-                                ),
-                                trailing: Text(
-                                  '\$' + amount.toStringAsFixed(2),
-                                  style: Theme.of(context).textTheme.titleMedium,
-                                ),
-                                onTap: () {
-                                  // TODO: Navigate to expense details or edit screen
-                                },
-                              ),
                             );
                           },
                         );
