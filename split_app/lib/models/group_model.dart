@@ -16,26 +16,13 @@ class GroupMember {
   });
 
   factory GroupMember.fromMap(Map<String, dynamic> map) {
-    try {
-      return GroupMember(
-        userId: map['userId']?.toString() ?? '',
-        username: map['username']?.toString() ?? 'Unknown User',
-        email: map['email']?.toString() ?? '',
-        isAdmin: map['isAdmin'] as bool? ?? false,
-        joinedAt: map['joinedAt'] != null 
-            ? (map['joinedAt'] as Timestamp).toDate()
-            : DateTime.now(),
-      );
-    } catch (e) {
-      print('Error parsing group member: $e');
-      return GroupMember(
-        userId: '',
-        username: 'Unknown User',
-        email: '',
-        isAdmin: false,
-        joinedAt: DateTime.now(),
-      );
-    }
+    return GroupMember(
+      userId: map['userId'] as String,
+      username: map['username'] as String,
+      email: map['email'] as String,
+      isAdmin: map['isAdmin'] as bool,
+      joinedAt: (map['joinedAt'] as Timestamp).toDate(),
+    );
   }
 
   Map<String, dynamic> toMap() {

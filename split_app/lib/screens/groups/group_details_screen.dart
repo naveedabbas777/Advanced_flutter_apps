@@ -360,7 +360,7 @@ class GroupDetailsScreen extends StatelessWidget {
                         }
                         String paidByUserId = expenseData['paidBy']?.toString() ?? '';
                         Timestamp timestamp =
-                            expenseData['timestamp'] as Timestamp? ?? Timestamp.now();
+                            expenseData['timestamp'] as Timestamp? ?? Timestamp.fromDate(DateTime.now());
 
                         String splitType = expenseData['splitType']?.toString() ?? 'equal';
                         dynamic splitData;
@@ -464,7 +464,12 @@ class GroupDetailsScreen extends StatelessWidget {
                                                 final memberName = group.members
                                                     .firstWhere((m) =>
                                                         m.userId == entry.key,
-                                                        orElse: () => GroupMember(userId: entry.key, username: 'Unknown', email: 'unknown@example.com', isAdmin: false, joinedAt: Timestamp.now()))
+                                                        orElse: () => GroupMember(
+                                                            userId: entry.key,
+                                                            username: 'Unknown',
+                                                            email: 'unknown@example.com',
+                                                            isAdmin: false,
+                                                            joinedAt: DateTime.now()))
                                                     .username;
                                                 return Padding(
                                                   padding: const EdgeInsets.symmetric(

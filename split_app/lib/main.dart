@@ -106,11 +106,11 @@ class MyApp extends StatelessWidget {
                 theme: ThemeProvider.lightTheme,
                 darkTheme: ThemeProvider.darkTheme,
                 themeMode: themeProvider.themeMode,
-                home: _user == null ? LoginScreen() : HomeScreen(),
+                home: LoginScreen(), // Always show LoginScreen first
                 onGenerateRoute: (settings) {
                   switch (settings.name) {
                     case '/':
-                      return MaterialPageRoute(builder: (_) => HomeScreen());
+                      return MaterialPageRoute(builder: (_) => _user == null ? LoginScreen() : HomeScreen());
                     case '/login':
                       return MaterialPageRoute(builder: (_) => LoginScreen());
                     case '/register':
@@ -118,10 +118,15 @@ class MyApp extends StatelessWidget {
                     case '/forgot-password':
                       return MaterialPageRoute(builder: (_) => ForgotPasswordScreen());
                     case '/profile':
-                      return MaterialPageRoute(builder: (_) => ProfileScreen());
+                      return MaterialPageRoute(
+                        builder: (_) => _user == null ? LoginScreen() : ProfileScreen(),
+                      );
                     case '/invitations':
-                      return MaterialPageRoute(builder: (_) => InvitationsScreen());
+                      return MaterialPageRoute(
+                        builder: (_) => _user == null ? LoginScreen() : InvitationsScreen(),
+                      );
                     case '/group-details':
+                      if (_user == null) return MaterialPageRoute(builder: (_) => LoginScreen());
                       final args = settings.arguments as Map<String, dynamic>;
                       return MaterialPageRoute(
                         builder: (_) => GroupDetailsScreen(
@@ -129,6 +134,7 @@ class MyApp extends StatelessWidget {
                         ),
                       );
                     case '/add-expense':
+                      if (_user == null) return MaterialPageRoute(builder: (_) => LoginScreen());
                       final args = settings.arguments as Map<String, dynamic>;
                       return MaterialPageRoute(
                         builder: (_) => AddExpenseScreen(
@@ -137,6 +143,7 @@ class MyApp extends StatelessWidget {
                         ),
                       );
                     case '/add-member':
+                      if (_user == null) return MaterialPageRoute(builder: (_) => LoginScreen());
                       final args = settings.arguments as Map<String, dynamic>;
                       return MaterialPageRoute(
                         builder: (_) => AddMemberScreen(
@@ -144,7 +151,9 @@ class MyApp extends StatelessWidget {
                         ),
                       );
                     case '/create-group':
-                      return MaterialPageRoute(builder: (_) => CreateGroupScreen());
+                      return MaterialPageRoute(
+                        builder: (_) => _user == null ? LoginScreen() : CreateGroupScreen(),
+                      );
                     default:
                       return MaterialPageRoute(
                         builder: (_) => Scaffold(

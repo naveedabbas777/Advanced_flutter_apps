@@ -25,6 +25,9 @@ class AppAuthProvider extends ChangeNotifier {
   bool get isEmailVerified => _user?.emailVerified ?? false;
 
   AppAuthProvider() {
+    // Sign out user when app starts
+    _auth.signOut();
+    
     _auth.authStateChanges().listen((User? user) async {
       _user = user;
       if (user != null) {
@@ -545,6 +548,26 @@ class AppAuthProvider extends ChangeNotifier {
       throw 'Failed to add expense: $e';
     } finally {
       _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> signOut() async {
+    try {
+      _isLoading = true;
+      _error = null;
+      notifyListeners();
+
+      await _auth.signOut();
+      _user = null;
+      _userModel = null;
+      _userSubscription?.cancel();
+
+      _isLoading = false;
+      notifyListeners();
+    } catch (e) {
+      _isLoading = false;
+      _error = 'Failed to sign out: $e';
       notifyListeners();
     }
   }
