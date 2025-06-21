@@ -8,9 +8,14 @@ import '../../providers/group_provider.dart';
 import 'package:split_app/models/group_model.dart';
 import 'package:split_app/screens/expenses/add_expense_screen.dart';
 import 'package:split_app/screens/members/add_member_screen.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'dart:io';
+import 'group_chat_screen.dart';
+import 'package:badges/badges.dart' as badges;
 
 // Re-applying to refresh parsing due to persistent 'Expected an identifier' error.
-class GroupDetailsScreen extends StatelessWidget {
+class GroupDetailsScreen extends StatefulWidget {
   final String groupId;
 
   const GroupDetailsScreen({
@@ -19,19 +24,48 @@ class GroupDetailsScreen extends StatelessWidget {
   });
 
   @override
+  State<GroupDetailsScreen> createState() => _GroupDetailsScreenState();
+}
+
+class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
+  File? _selectedImage;
+  bool _isUploading = false;
+
+  Future<void> _pickAndUploadImage(String groupId) async {
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(source: ImageSource.gallery, imageQuality: 75);
+    if (pickedFile != null) {
+      setState(() { _isUploading = true; });
+      final imageFile = File(pickedFile.path);
+      try {
+        final fileName = 'group_avatars/${DateTime.now().millisecondsSinceEpoch}_${imageFile.path.split('/').last}';
+        final ref = FirebaseStorage.instance.ref().child(fileName);
+        final uploadTask = await ref.putFile(imageFile);
+        final photoUrl = await uploadTask.ref.getDownloadURL();
+        await FirebaseFirestore.instance.collection('groups').doc(groupId).update({'photoUrl': photoUrl});
+        setState(() { _selectedImage = imageFile; });
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to upload photo: $e')),
+        );
+      } finally {
+        setState(() { _isUploading = false; });
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AppAuthProvider>(context);
-    final groupProvider = Provider.of<GroupProvider>(context); // Access GroupProvider
+    final groupProvider = Provider.of<GroupProvider>(context);
     final user = authProvider.currentUser;
-
     if (user == null) {
       return const Scaffold(body: Center(child: Text('User not logged in.')));
     }
-
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
       stream: FirebaseFirestore.instance
           .collection('groups')
-          .doc(groupId)
+          .doc(widget.groupId)
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
@@ -40,78 +74,126 @@ class GroupDetailsScreen extends StatelessWidget {
             body: Center(child: Text('Error: ${snapshot.error}')),
           );
         }
-
         if (snapshot.connectionState == ConnectionState.waiting) {
           return Scaffold(
             appBar: AppBar(title: const Text('Loading...')),
             body: const Center(child: CircularProgressIndicator()),
           );
         }
-
         if (!snapshot.hasData || !snapshot.data!.exists) {
           return Scaffold(
             appBar: AppBar(title: const Text('Group Not Found')),
             body: const Center(child: Text('Group not found.')),
           );
         }
-
         final group = GroupModel.fromFirestore(snapshot.data!);
-
         String groupName = group.name;
         List<GroupMember> groupMembers = group.members;
-
+        final isAdmin = groupProvider.isUserAdmin(user.uid, group.members);
         return Scaffold(
           appBar: AppBar(
             title: Text(groupName),
             actions: [
-              if (groupProvider.isUserAdmin(user.uid, group.members)) ...[
-                IconButton(
-                  icon: const Icon(Icons.group_add),
-                  onPressed: () {
-                    Navigator.pushNamed(
-                      context,
-                      '/add-member',
-                      arguments: {'groupId': groupId},
-                    );
-                  },
-                ),
-                IconButton(
-                  icon: const Icon(Icons.delete),
-                  onPressed: () {
-                    showDialog(
-                      context: context,
-                      builder: (context) => AlertDialog(
-                        title: const Text('Delete Group'),
-                        content: const Text('Are you sure you want to delete this group? This action cannot be undone.'),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(context),
-                            child: const Text('Cancel'),
-                          ),
-                          TextButton(
-                            onPressed: () async {
-                              Navigator.pop(context);
-                              try {
-                                await groupProvider.deleteGroup(groupId, user.uid);
-                                Navigator.pop(context); // Return to previous screen
-                              } catch (e) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text(e.toString())),
-                                );
-                              }
-                            },
-                            child: const Text('Delete', style: TextStyle(color: Colors.red)),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-              ],
+              StreamBuilder<DocumentSnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('groups')
+                    .doc(group.id)
+                    .collection('chatViews')
+                    .doc(user.uid)
+                    .snapshots(),
+                builder: (context, chatViewSnapshot) {
+                  Timestamp? lastSeen;
+                  if (chatViewSnapshot.hasData && chatViewSnapshot.data!.exists) {
+                    lastSeen = chatViewSnapshot.data!.get('lastSeen') as Timestamp?;
+                  }
+                  return StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collection('groups')
+                        .doc(group.id)
+                        .collection('messages')
+                        .orderBy('timestamp', descending: false)
+                        .snapshots(),
+                    builder: (context, msgSnapshot) {
+                      int unseenCount = 0;
+                      if (msgSnapshot.hasData && lastSeen != null) {
+                        unseenCount = msgSnapshot.data!.docs.where((doc) {
+                          final ts = doc['timestamp'] as Timestamp?;
+                          return ts != null && ts.toDate().isAfter(lastSeen!.toDate());
+                        }).length;
+                      } else if (msgSnapshot.hasData && lastSeen == null) {
+                        unseenCount = msgSnapshot.data!.docs.length;
+                      }
+                      return badges.Badge(
+                        showBadge: unseenCount > 0,
+                        badgeContent: Text('$unseenCount', style: const TextStyle(color: Colors.white, fontSize: 10)),
+                        position: badges.BadgePosition.topEnd(top: -8, end: -8),
+                        child: IconButton(
+                          icon: const Icon(Icons.chat_bubble_outline),
+                          tooltip: 'Group Chat',
+                          onPressed: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => GroupChatScreen(
+                                  groupId: group.id,
+                                  groupName: group.name,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+              IconButton(
+                icon: const Icon(Icons.settings),
+                onPressed: () => _showGroupSettings(context, group, isAdmin, user.uid, groupProvider),
+              ),
             ],
           ),
           body: Column(
             children: [
+              const SizedBox(height: 24),
+              Center(
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    CircleAvatar(
+                      radius: 48,
+                      backgroundImage: group.photoUrl != null
+                          ? NetworkImage(group.photoUrl!)
+                          : null,
+                      child: group.photoUrl == null
+                          ? Text(
+                              groupName.isNotEmpty ? groupName[0].toUpperCase() : '?',
+                              style: const TextStyle(fontSize: 32),
+                            )
+                          : null,
+                    ),
+                    if (isAdmin)
+                      Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: GestureDetector(
+                          onTap: _isUploading ? null : () => _pickAndUploadImage(widget.groupId),
+                          child: CircleAvatar(
+                            radius: 18,
+                            backgroundColor: Theme.of(context).colorScheme.primary,
+                            child: _isUploading
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                  )
+                                : const Icon(Icons.camera_alt, color: Colors.white, size: 20),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
               // Group Members Card
               Padding(
                 padding: const EdgeInsets.all(16.0),
@@ -146,46 +228,92 @@ class GroupDetailsScreen extends StatelessWidget {
                         Wrap(
                           spacing: 8.0,
                           children: groupMembers.map((member) {
-                            return Chip(
-                              label: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(member.username),
-                                  if (member.isAdmin) ...[
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      'Admin',
-                                      style: TextStyle(
-                                        color: Theme.of(context).colorScheme.primary,
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ],
-                                ],
+                            final isCurrentUser = member.userId == user.uid;
+                            final canManage = isAdmin && !isCurrentUser;
+                            return Padding(
+                              padding: const EdgeInsets.only(right: 4.0, bottom: 4.0),
+                              child: GestureDetector(
+                                onTap: canManage
+                                    ? () async {
+                                        final action = await showMenu<String>(
+                                          context: context,
+                                          position: RelativeRect.fromLTRB(100, 100, 0, 0),
+                                          items: [
+                                            if (!member.isAdmin)
+                                              const PopupMenuItem(
+                                                value: 'make_admin',
+                                                child: Text('Make Admin'),
+                                              ),
+                                            if (member.isAdmin)
+                                              const PopupMenuItem(
+                                                value: 'remove_admin',
+                                                child: Text('Remove Admin'),
+                                              ),
+                                          ],
+                                        );
+                                        if (action == 'make_admin' || action == 'remove_admin') {
+                                          // Update isAdmin in Firestore
+                                          final updatedMember = GroupMember(
+                                            userId: member.userId,
+                                            username: member.username,
+                                            email: member.email,
+                                            isAdmin: action == 'make_admin',
+                                            joinedAt: member.joinedAt,
+                                          );
+                                          final updatedMembers = groupMembers.map((m) =>
+                                            m.userId == member.userId ? updatedMember.toMap() : m.toMap()
+                                          ).toList();
+                                          await FirebaseFirestore.instance.collection('groups').doc(group.id).update({
+                                            'members': updatedMembers,
+                                          });
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(content: Text(action == 'make_admin' ? 'Promoted to admin.' : 'Admin rights removed.')),
+                                          );
+                                        }
+                                      }
+                                    : null,
+                                child: Chip(
+                                  label: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(member.username),
+                                      if (member.isAdmin) ...[
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          'Admin',
+                                          style: TextStyle(
+                                            color: Theme.of(context).colorScheme.primary,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                  avatar: CircleAvatar(
+                                    child: Text(member.username.substring(0, 1).toUpperCase()),
+                                  ),
+                                  backgroundColor: Theme.of(context).colorScheme.secondary.withOpacity(0.1),
+                                  deleteIcon: groupProvider.isUserAdmin(user.uid, group.members) && 
+                                            member.userId != user.uid ? 
+                                            const Icon(Icons.remove_circle_outline) : null,
+                                  onDeleted: groupProvider.isUserAdmin(user.uid, group.members) && 
+                                            member.userId != user.uid ?
+                                            () async {
+                                              try {
+                                                await groupProvider.removeMember(
+                                                  groupId: widget.groupId,
+                                                  userId: member.userId,
+                                                  removedBy: user.uid,
+                                                );
+                                              } catch (e) {
+                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                  SnackBar(content: Text(e.toString())),
+                                                );
+                                              }
+                                            } : null,
+                                ),
                               ),
-                              avatar: CircleAvatar(
-                                child: Text(member.username.substring(0, 1).toUpperCase()),
-                              ),
-                              backgroundColor: Theme.of(context).colorScheme.secondary.withOpacity(0.1),
-                              deleteIcon: groupProvider.isUserAdmin(user.uid, group.members) && 
-                                        member.userId != user.uid ? 
-                                        const Icon(Icons.remove_circle_outline) : null,
-                              onDeleted: groupProvider.isUserAdmin(user.uid, group.members) && 
-                                        member.userId != user.uid ?
-                                        () async {
-                                          try {
-                                            await groupProvider.removeMember(
-                                              groupId: groupId,
-                                              userId: member.userId,
-                                              removedBy: user.uid,
-                                            );
-                                          } catch (e) {
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              SnackBar(content: Text(e.toString())),
-                                            );
-                                          }
-                                        } : null,
                             );
                           }).toList(),
                         ),
@@ -222,7 +350,7 @@ class GroupDetailsScreen extends StatelessWidget {
                   return StreamBuilder<QuerySnapshot>(
                     stream: FirebaseFirestore.instance
                         .collection('groups')
-                        .doc(groupId)
+                        .doc(widget.groupId)
                         .collection('expenses')
                         .orderBy('timestamp', descending: true)
                         .snapshots(),
@@ -305,7 +433,7 @@ class GroupDetailsScreen extends StatelessWidget {
                 child: StreamBuilder<QuerySnapshot>(
                   stream: FirebaseFirestore.instance
                       .collection('groups')
-                      .doc(groupId)
+                      .doc(widget.groupId)
                       .collection('expenses')
                       .orderBy('timestamp', descending: true)
                       .snapshots(),
@@ -548,11 +676,133 @@ class GroupDetailsScreen extends StatelessWidget {
               Navigator.pushNamed(
                 context,
                 '/add-expense',
-                arguments: {'groupId': groupId, 'groupName': groupName},
+                arguments: {'groupId': widget.groupId, 'groupName': groupName},
               );
             },
             icon: const Icon(Icons.add),
             label: const Text('Add Expense'),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showGroupSettings(BuildContext context, GroupModel group, bool isAdmin, String userId, GroupProvider groupProvider) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (isAdmin)
+                ListTile(
+                  leading: const Icon(Icons.edit),
+                  title: const Text('Rename Group'),
+                  onTap: () async {
+                    Navigator.pop(context);
+                    final newName = await showDialog<String>(
+                      context: context,
+                      builder: (context) {
+                        final controller = TextEditingController(text: group.name);
+                        return AlertDialog(
+                          title: const Text('Rename Group'),
+                          content: TextField(
+                            controller: controller,
+                            decoration: const InputDecoration(labelText: 'New group name'),
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context),
+                              child: const Text('Cancel'),
+                            ),
+                            TextButton(
+                              onPressed: () => Navigator.pop(context, controller.text.trim()),
+                              child: const Text('Rename'),
+                            ),
+                          ],
+                        );
+                      },
+                    );
+                    if (newName != null && newName.isNotEmpty && newName != group.name) {
+                      await FirebaseFirestore.instance.collection('groups').doc(group.id).update({'name': newName});
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Group renamed.')));
+                    }
+                  },
+                ),
+              ListTile(
+                leading: const Icon(Icons.exit_to_app),
+                title: const Text('Leave Group'),
+                onTap: () async {
+                  Navigator.pop(context);
+                  final confirm = await showDialog<bool>(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: const Text('Leave Group'),
+                      content: const Text('Are you sure you want to leave this group?'),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: const Text('Cancel'),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          child: const Text('Leave'),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (confirm == true) {
+                    // Remove user from group
+                    final memberToRemove = group.members.firstWhere((m) => m.userId == userId);
+                    await FirebaseFirestore.instance.collection('groups').doc(group.id).update({
+                      'members': FieldValue.arrayRemove([memberToRemove.toMap()]),
+                    });
+                    await FirebaseFirestore.instance.collection('users').doc(userId).update({
+                      'groupIds': FieldValue.arrayRemove([group.id]),
+                    });
+                    Navigator.of(context).pop();
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('You left the group.')));
+                  }
+                },
+              ),
+              if (isAdmin)
+                ListTile(
+                  leading: const Icon(Icons.delete, color: Colors.red),
+                  title: const Text('Delete Group', style: TextStyle(color: Colors.red)),
+                  onTap: () async {
+                    Navigator.pop(context);
+                    final confirm = await showDialog<bool>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text('Delete Group'),
+                        content: const Text('Are you sure you want to delete this group? This action cannot be undone.'),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, false),
+                            child: const Text('Cancel'),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, true),
+                            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirm == true) {
+                      try {
+                        await groupProvider.deleteGroup(group.id, userId);
+                        Navigator.of(context).pop();
+                      } catch (e) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to delete group: $e')));
+                      }
+                    }
+                  },
+                ),
+            ],
           ),
         );
       },
