@@ -49,7 +49,7 @@ class GroupProvider extends ChangeNotifier {
     });
   }
 
-  Future<void> createGroup(String name, UserModel creator) async {
+  Future<void> createGroup(String name, UserModel creator, {String? photoUrl}) async {
     try {
       _setLoading(true);
       _error = null;
@@ -68,6 +68,7 @@ class GroupProvider extends ChangeNotifier {
             'joinedAt': Timestamp.fromDate(DateTime.now()),
           }
         ],
+        if (photoUrl != null) 'photoUrl': photoUrl,
       });
 
       // Add group to creator's groups list

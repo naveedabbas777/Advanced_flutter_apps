@@ -25,7 +25,6 @@ import 'providers/group_provider.dart';
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
   print("Handling a background message: ${message.messageId}");
-  // You can perform heavy data processing here, like saving to local DB
 }
 
 void main() async {
@@ -34,8 +33,7 @@ void main() async {
 
   // Request FCM permissions and get token
   FirebaseMessaging messaging = FirebaseMessaging.instance;
-
-  NotificationSettings settings = await messaging.requestPermission(
+  await messaging.requestPermission(
     alert: true,
     announcement: false,
     badge: true,
@@ -45,41 +43,14 @@ void main() async {
     sound: true,
   );
 
-  print('User granted permission: ${settings.authorizationStatus}');
-
-  String? token = await messaging.getToken();
-  print("FCM Token: $token");
-  // You might want to save this token to Firestore for the current user
-  // FirebaseFirestore.instance.collection('users').doc(FirebaseAuth.instance.currentUser?.uid).update({'fcmToken': token});
-
   // Handle foreground messages
   FirebaseMessaging.onMessage.listen((RemoteMessage message) {
     print('Got a message whilst in the foreground!');
     print('Message data: ${message.data}');
-
-    if (message.notification != null) {
-      print('Message also contained a notification: ${message.notification}');
-      // Display a local notification or update UI based on the message
-    }
   });
 
-  // Handle background messages (when app is terminated or in background)
+  // Handle background messages
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
-
-  // Handle messages when app is opened from a terminated state
-  FirebaseMessaging.instance.getInitialMessage().then((RemoteMessage? message) {
-    if (message != null) {
-      print("App opened from terminated state by message: ${message.data}");
-      // Handle navigation or specific action based on the message
-    }
-  });
-
-  // Handle messages when app is opened from a background state
-  FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-    print('A new onMessageOpenedApp event was published!');
-    print('Message data: ${message.data}');
-    // Handle navigation or specific action based on the message
-  });
 
   runApp(MyApp());
 }
@@ -95,78 +66,80 @@ class MyApp extends StatelessWidget {
       ],
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, child) {
-          final authProvider = Provider.of<AppAuthProvider>(context);
-          return StreamBuilder<User?>( // Listen to authentication state changes
-            stream: FirebaseAuth.instance.authStateChanges(),
-            builder: (context, snapshot) {
-              final _user = snapshot.data;
+          return MaterialApp(
+            title: 'Split App',
+            theme: ThemeProvider.lightTheme,
+            darkTheme: ThemeProvider.darkTheme,
+            themeMode: themeProvider.themeMode,
+            home: Consumer<AppAuthProvider>(
+              builder: (context, authProvider, _) {
+                if (authProvider.isLoading) {
+                  return const Scaffold(
+                    body: Center(
+                      child: CircularProgressIndicator(),
+                    ),
+                  );
+                }
+                return authProvider.currentUser == null
+                    ? LoginScreen()
+                    : HomeScreen();
+              },
+            ),
+            onGenerateRoute: (settings) {
+              final authProvider = Provider.of<AppAuthProvider>(context, listen: false);
+              
+              if (authProvider.currentUser == null) {
+                return MaterialPageRoute(builder: (_) => LoginScreen());
+              }
 
-              return MaterialApp(
-                title: 'Split App',
-                theme: ThemeProvider.lightTheme,
-                darkTheme: ThemeProvider.darkTheme,
-                themeMode: themeProvider.themeMode,
-                home: LoginScreen(), // Always show LoginScreen first
-                onGenerateRoute: (settings) {
-                  switch (settings.name) {
-                    case '/':
-                      return MaterialPageRoute(builder: (_) => _user == null ? LoginScreen() : HomeScreen());
-                    case '/login':
-                      return MaterialPageRoute(builder: (_) => LoginScreen());
-                    case '/register':
-                      return MaterialPageRoute(builder: (_) => RegisterScreen());
-                    case '/forgot-password':
-                      return MaterialPageRoute(builder: (_) => ForgotPasswordScreen());
-                    case '/profile':
-                      return MaterialPageRoute(
-                        builder: (_) => _user == null ? LoginScreen() : ProfileScreen(),
-                      );
-                    case '/invitations':
-                      return MaterialPageRoute(
-                        builder: (_) => _user == null ? LoginScreen() : InvitationsScreen(),
-                      );
-                    case '/group-details':
-                      if (_user == null) return MaterialPageRoute(builder: (_) => LoginScreen());
-                      final args = settings.arguments as Map<String, dynamic>;
-                      return MaterialPageRoute(
-                        builder: (_) => GroupDetailsScreen(
-                          groupId: args['groupId'] as String,
-                        ),
-                      );
-                    case '/add-expense':
-                      if (_user == null) return MaterialPageRoute(builder: (_) => LoginScreen());
-                      final args = settings.arguments as Map<String, dynamic>;
-                      return MaterialPageRoute(
-                        builder: (_) => AddExpenseScreen(
-                          groupId: args['groupId'] as String,
-                          groupName: args['groupName'] as String,
-                        ),
-                      );
-                    case '/add-member':
-                      if (_user == null) return MaterialPageRoute(builder: (_) => LoginScreen());
-                      final args = settings.arguments as Map<String, dynamic>;
-                      return MaterialPageRoute(
-                        builder: (_) => AddMemberScreen(
-                          groupId: args['groupId'] as String,
-                        ),
-                      );
-                    case '/create-group':
-                      return MaterialPageRoute(
-                        builder: (_) => _user == null ? LoginScreen() : CreateGroupScreen(),
-                      );
-                    default:
-                      return MaterialPageRoute(
-                        builder: (_) => Scaffold(
-                          body: Center(
-                            child: Text('Route not found!'),
-                          ),
-                        ),
-                      );
-                  }
-                },
-                debugShowCheckedModeBanner: false, // Remove debug banner
-              );
+              switch (settings.name) {
+                case '/':
+                  return MaterialPageRoute(builder: (_) => HomeScreen());
+                case '/login':
+                  return MaterialPageRoute(builder: (_) => LoginScreen());
+                case '/register':
+                  return MaterialPageRoute(builder: (_) => RegisterScreen());
+                case '/forgot-password':
+                  return MaterialPageRoute(builder: (_) => ForgotPasswordScreen());
+                case '/profile':
+                  return MaterialPageRoute(builder: (_) => ProfileScreen());
+                case '/invitations':
+                  return MaterialPageRoute(builder: (_) => InvitationsScreen());
+                case '/group-details':
+                  final args = settings.arguments as Map<String, dynamic>;
+                  return MaterialPageRoute(
+                    builder: (_) => GroupDetailsScreen(
+                      groupId: args['groupId'] as String,
+                    ),
+                  );
+                case '/add-expense':
+                  final args = settings.arguments as Map<String, dynamic>;
+                  return MaterialPageRoute(
+                    builder: (_) => AddExpenseScreen(
+                      groupId: args['groupId'] as String,
+                      groupName: args['groupName'] as String,
+                    ),
+                  );
+                case '/add-member':
+                  final args = settings.arguments as Map<String, dynamic>;
+                  return MaterialPageRoute(
+                    builder: (_) => AddMemberScreen(
+                      groupId: args['groupId'] as String,
+                    ),
+                  );
+                case '/create-group':
+                  return MaterialPageRoute(builder: (_) => CreateGroupScreen());
+                default:
+                  return MaterialPageRoute(
+                    builder: (_) => Scaffold(
+                      body: Center(
+                        child: Text('Route not found!'),
+                      ),
+                    ),
+                  );
+              }
             },
+            debugShowCheckedModeBanner: false,
           );
         },
       ),

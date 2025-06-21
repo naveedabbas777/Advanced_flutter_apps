@@ -42,6 +42,7 @@ class GroupModel {
   final String createdBy;
   final DateTime createdAt;
   final List<GroupMember> members;
+  final String? photoUrl;
 
   GroupModel({
     required this.id,
@@ -49,6 +50,7 @@ class GroupModel {
     required this.createdBy,
     required this.createdAt,
     required this.members,
+    this.photoUrl,
   });
 
   factory GroupModel.fromFirestore(DocumentSnapshot doc) {
@@ -74,6 +76,7 @@ class GroupModel {
           ? (data['createdAt'] as Timestamp).toDate()
           : DateTime.now(),
       members: membersList,
+      photoUrl: data['photoUrl'],
     );
   }
 
@@ -83,12 +86,14 @@ class GroupModel {
       'createdBy': createdBy,
       'createdAt': Timestamp.fromDate(createdAt),
       'members': members.map((member) => member.toMap()).toList(),
+      if (photoUrl != null) 'photoUrl': photoUrl,
     };
   }
 
   GroupModel copyWith({
     String? name,
     List<GroupMember>? members,
+    String? photoUrl,
   }) {
     return GroupModel(
       id: this.id,
@@ -96,6 +101,7 @@ class GroupModel {
       createdBy: this.createdBy,
       createdAt: this.createdAt,
       members: members ?? this.members,
+      photoUrl: photoUrl ?? this.photoUrl,
     );
   }
 } 

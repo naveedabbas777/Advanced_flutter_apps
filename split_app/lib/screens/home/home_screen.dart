@@ -134,7 +134,7 @@ class HomeScreen extends StatelessWidget {
                                   return Text('Error loading expenses', style: TextStyle(color: Colors.red));
                                 }
                                 if (expenseSnapshot.connectionState == ConnectionState.waiting) {
-                                  return Text('Loading balance...');
+                                  return Text('Loading group summary...');
                                 }
 
                                 double totalSpent = 0.0;
@@ -160,15 +160,12 @@ class HomeScreen extends StatelessWidget {
                                     final numMembers = group.members.length;
                                     currentUserShare = numMembers > 0 ? amount / numMembers : 0.0;
                                   } else if (splitType == 'custom' && splitData is Map<String, dynamic>) {
-                                    // Ensure customSplitAmounts map is stored with double values
                                     currentUserShare = (splitData[currentUserUid] as num?)?.toDouble() ?? 0.0;
                                   }
 
                                   if (paidBy == currentUserUid) {
-                                    // If current user paid, they are owed their share minus what they contributed
                                     userIsOwed += (amount - currentUserShare);
                                   } else {
-                                    // If current user is part of the split, they owe their share
                                     if ((splitType == 'equal' && splitData is List && splitData.contains(currentUserUid)) ||
                                         (splitType == 'custom' && splitData is Map && splitData.containsKey(currentUserUid))) {
                                       userOwes += currentUserShare;
@@ -181,12 +178,29 @@ class HomeScreen extends StatelessWidget {
                                     ? Colors.grey
                                     : (balance > 0 ? Colors.green : Colors.red);
 
-                                return Text(
-                                  'Balance: \${balance.toStringAsFixed(2)}',
-                                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                    color: balanceColor,
-                                    fontWeight: FontWeight.bold,
-                                  ),
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Icon(Icons.attach_money, size: 16, color: Theme.of(context).colorScheme.primary),
+                                        SizedBox(width: 4),
+                                        Text('Total: 	${totalSpent.toStringAsFixed(2)}', style: Theme.of(context).textTheme.bodySmall),
+                                        SizedBox(width: 12),
+                                        Icon(Icons.group, size: 16, color: Theme.of(context).colorScheme.primary),
+                                        SizedBox(width: 4),
+                                        Text('Members: ${group.members.length}', style: Theme.of(context).textTheme.bodySmall),
+                                      ],
+                                    ),
+                                    SizedBox(height: 4),
+                                    Text(
+                                      'Your Balance: 	${balance.toStringAsFixed(2)}',
+                                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                        color: balanceColor,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
                                 );
                               },
                             ),

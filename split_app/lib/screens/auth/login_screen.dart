@@ -30,16 +30,19 @@ class _LoginScreenState extends State<LoginScreen> {
       final authProvider = Provider.of<AppAuthProvider>(context, listen: false);
       
       try {
+        print('Starting login process with email: ${_emailController.text.trim()}');
         await authProvider.login(
           _emailController.text.trim(),
           _passwordController.text,
         );
 
         if (authProvider.error != null) {
+          print('Login error: ${authProvider.error}');
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(authProvider.error!),
+              content: Text('Login failed: ${authProvider.error}'),
+              backgroundColor: Colors.red,
               duration: const Duration(seconds: 5),
             ),
           );
@@ -47,14 +50,17 @@ class _LoginScreenState extends State<LoginScreen> {
         }
 
         // Check email verification status
+        print('Checking email verification...');
         bool isEmailVerified = await authProvider.checkEmailVerification();
         print('Email verification status after login: $isEmailVerified');
 
         if (!isEmailVerified) {
+          print('Email not verified, showing verification dialog...');
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Please verify your email before logging in.'),
+              backgroundColor: Colors.orange,
               duration: Duration(seconds: 5),
             ),
           );
@@ -77,19 +83,22 @@ class _LoginScreenState extends State<LoginScreen> {
                 TextButton(
                   onPressed: () async {
                     Navigator.pop(context);
+                    print('Resending verification email...');
                     await authProvider.resendVerificationEmail();
                     if (!mounted) return;
                     if (authProvider.error == null) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
                           content: Text('Verification email sent! Please check your inbox.'),
+                          backgroundColor: Colors.green,
                           duration: Duration(seconds: 5),
                         ),
                       );
                     } else {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text(authProvider.error!),
+                          content: Text('Failed to resend verification email: ${authProvider.error}'),
+                          backgroundColor: Colors.red,
                           duration: const Duration(seconds: 5),
                         ),
                       );
@@ -110,7 +119,8 @@ class _LoginScreenState extends State<LoginScreen> {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('An error occurred: $e'),
+            content: Text('Login failed: $e'),
+            backgroundColor: Colors.red,
             duration: const Duration(seconds: 5),
           ),
         );

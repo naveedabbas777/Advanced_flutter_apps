@@ -5,12 +5,12 @@ import 'dart:io'; // Import for SocketException
 import 'package:firebase_messaging/firebase_messaging.dart'; // Import Firebase Messaging
 import '../models/user_model.dart';
 import 'dart:async'; // Import for StreamSubscription
+import '../services/auth_service.dart';
 // import 'package:http/http.dart' as http;
 // import 'dart:convert';
 
 class AppAuthProvider extends ChangeNotifier {
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final AuthService _authService = AuthService();
   User? _user;
   UserModel? _userModel;
   bool _isLoading = false;
@@ -25,10 +25,7 @@ class AppAuthProvider extends ChangeNotifier {
   bool get isEmailVerified => _user?.emailVerified ?? false;
 
   AppAuthProvider() {
-    // Sign out user when app starts
-    _auth.signOut();
-    
-    _auth.authStateChanges().listen((User? user) async {
+    _authService.authStateChanges.listen((User? user) async {
       _user = user;
       if (user != null) {
         await _setupUserListener();
@@ -44,7 +41,11 @@ class AppAuthProvider extends ChangeNotifier {
     if (_user == null) return;
 
     _userSubscription?.cancel();
-    _userSubscription = _firestore.collection('users').doc(_user!.uid).snapshots().listen((doc) {
+    _userSubscription = FirebaseFirestore.instance
+        .collection('users')
+        .doc(_user!.uid)
+        .snapshots()
+        .listen((doc) {
       if (doc.exists) {
         _userModel = UserModel.fromFirestore(doc);
       } else {
@@ -60,57 +61,13 @@ class AppAuthProvider extends ChangeNotifier {
       _error = null;
       notifyListeners();
 
-      print('Attempting to sign up with email: $email');
-
-      // Create user with email and password
-      UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
-
-      // Update user profile with username
-      await userCredential.user?.updateDisplayName(username);
-
-      // Send email verification
-      await userCredential.user?.sendEmailVerification();
-
-      // Create user document in Firestore
-      final userModel = UserModel(
-        uid: userCredential.user!.uid,
-        username: username,
-        email: email,
-        groupIds: [],
-        invitationIds: [],
-        createdAt: DateTime.now(),
-      );
-
-      await _firestore.collection('users').doc(userCredential.user!.uid).set(userModel.toMap());
-
+      await _authService.registerWithEmailAndPassword(email, password, username);
+      await _saveFcmToken();
       _isLoading = false;
-      notifyListeners();
-    } on FirebaseAuthException catch (e) {
-      _isLoading = false;
-      switch (e.code) {
-        case 'email-already-in-use':
-          _error = 'This email is already registered.';
-          break;
-        case 'invalid-email':
-          _error = 'Please enter a valid email address.';
-          break;
-        case 'weak-password':
-          _error = 'Password is too weak. Please use a stronger password.';
-          break;
-        default:
-          _error = 'An error occurred during registration: ${e.message}';
-      }
-      notifyListeners();
-    } on SocketException {
-      _isLoading = false;
-      _error = 'No internet connection. Please check your connection and try again.';
       notifyListeners();
     } catch (e) {
       _isLoading = false;
-      _error = 'An unexpected error occurred: $e';
+      _error = e.toString();
       notifyListeners();
     }
   }
@@ -121,84 +78,87 @@ class AppAuthProvider extends ChangeNotifier {
       _error = null;
       notifyListeners();
 
-      print('Attempting to sign in with email: $email');
-
-      // Sign in user
-      UserCredential userCredential = await _auth.signInWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
-
-      print('Sign in successful, checking email verification...');
-
-      // Force reload user to get latest email verification status
-      await userCredential.user?.reload();
-      User? updatedUser = _auth.currentUser;
-
-      print('User email verification status: ${updatedUser?.emailVerified}');
-      print('User email: ${updatedUser?.email}');
-
-      // Check if email is verified
-      if (updatedUser == null) {
-        _error = 'Failed to get user information. Please try again.';
-        _isLoading = false;
-        notifyListeners();
-        return;
-      }
-
-      if (!updatedUser.emailVerified) {
-        print('Email not verified, signing out...');
-        await _auth.signOut();
+      await _authService.signInWithEmailAndPassword(email, password);
+      await _saveFcmToken();
+      bool isVerified = await _authService.checkEmailVerification();
+      if (!isVerified) {
+        await _authService.signOut();
         _error = 'Please verify your email before logging in.';
         _isLoading = false;
         notifyListeners();
         return;
       }
 
-      print('Email verified, proceeding with login...');
-
-      // Update last login time
-      await _firestore.collection('users').doc(updatedUser.uid).update({
+      await _authService.updateUserProfile(_user!.uid, {
         'lastLogin': FieldValue.serverTimestamp(),
       });
 
-      // Load user data
-      await _setupUserListener();
-
       _isLoading = false;
-      notifyListeners();
-      print('Login process completed successfully');
-    } on FirebaseAuthException catch (e) {
-      print('FirebaseAuthException during login: ${e.code} - ${e.message}');
-      _isLoading = false;
-      switch (e.code) {
-        case 'user-not-found':
-          _error = 'No user found with this email.';
-          break;
-        case 'wrong-password':
-          _error = 'Incorrect password.';
-          break;
-        case 'invalid-email':
-          _error = 'Please enter a valid email address.';
-          break;
-        case 'user-disabled':
-          _error = 'This account has been disabled.';
-          break;
-        default:
-          _error = 'An error occurred during login: ${e.message}';
-      }
-      notifyListeners();
-    } on SocketException {
-      print('SocketException during login: No internet connection');
-      _isLoading = false;
-      _error = 'No internet connection. Please check your connection and try again.';
       notifyListeners();
     } catch (e) {
-      print('Unexpected error during login: $e');
       _isLoading = false;
-      _error = 'An unexpected error occurred: $e';
+      _error = e.toString();
       notifyListeners();
     }
+  }
+
+  Future<void> signOut() async {
+    try {
+      await _authService.signOut();
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+    }
+  }
+
+  Future<void> resetPassword(String email) async {
+    try {
+      _isLoading = true;
+      _error = null;
+      notifyListeners();
+
+      await _authService.resetPassword(email);
+      
+      _isLoading = false;
+      notifyListeners();
+    } catch (e) {
+      _isLoading = false;
+      _error = e.toString();
+      notifyListeners();
+    }
+  }
+
+  Future<void> resendVerificationEmail() async {
+    try {
+      _isLoading = true;
+      _error = null;
+      notifyListeners();
+
+      await _authService.resendVerificationEmail();
+      
+      _isLoading = false;
+      notifyListeners();
+    } catch (e) {
+      _isLoading = false;
+      _error = e.toString();
+      notifyListeners();
+    }
+  }
+
+  Future<bool> checkEmailVerification() async {
+    try {
+      return await _authService.checkEmailVerification();
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+      return false;
+    }
+  }
+
+  @override
+  void dispose() {
+    _userSubscription?.cancel();
+    super.dispose();
   }
 
   Future<void> updateProfile({String? username}) async {
@@ -223,7 +183,7 @@ class AppAuthProvider extends ChangeNotifier {
       }
 
       if (updates.isNotEmpty) {
-        await _firestore.collection('users').doc(_user!.uid).update(updates);
+        await FirebaseFirestore.instance.collection('users').doc(_user!.uid).update(updates);
         await _setupUserListener();
       }
 
@@ -240,7 +200,7 @@ class AppAuthProvider extends ChangeNotifier {
     try {
       if (_user == null) return;
 
-      await _firestore.collection('users').doc(_user!.uid).update({
+      await FirebaseFirestore.instance.collection('users').doc(_user!.uid).update({
         'groupIds': FieldValue.arrayUnion([groupId]),
       });
 
@@ -254,7 +214,7 @@ class AppAuthProvider extends ChangeNotifier {
     try {
       if (_user == null) return;
 
-      await _firestore.collection('users').doc(_user!.uid).update({
+      await FirebaseFirestore.instance.collection('users').doc(_user!.uid).update({
         'groupIds': FieldValue.arrayRemove([groupId]),
       });
 
@@ -268,7 +228,7 @@ class AppAuthProvider extends ChangeNotifier {
     try {
       if (_user == null) return;
 
-      await _firestore.collection('users').doc(_user!.uid).update({
+      await FirebaseFirestore.instance.collection('users').doc(_user!.uid).update({
         'invitationIds': FieldValue.arrayUnion([invitationId]),
       });
 
@@ -282,128 +242,13 @@ class AppAuthProvider extends ChangeNotifier {
     try {
       if (_user == null) return;
 
-      await _firestore.collection('users').doc(_user!.uid).update({
+      await FirebaseFirestore.instance.collection('users').doc(_user!.uid).update({
         'invitationIds': FieldValue.arrayRemove([invitationId]),
       });
 
       await _setupUserListener();
     } catch (e) {
       print('Error removing invitation from user: $e');
-    }
-  }
-
-  Future<void> logout() async {
-    try {
-      _isLoading = true;
-      _error = null;
-      notifyListeners();
-
-      await _auth.signOut();
-      _userModel = null;
-      _userSubscription?.cancel();
-      _isLoading = false;
-      notifyListeners();
-    } catch (e) {
-      _isLoading = false;
-      _error = 'An error occurred during logout: $e';
-      notifyListeners();
-    }
-  }
-
-  Future<void> resetPassword(String email) async {
-    try {
-      _isLoading = true;
-      _error = null;
-      notifyListeners();
-
-      await _auth.sendPasswordResetEmail(email: email);
-
-      _isLoading = false;
-      notifyListeners();
-    } on FirebaseAuthException catch (e) {
-      _isLoading = false;
-      switch (e.code) {
-        case 'user-not-found':
-          _error = 'No user found with this email.';
-          break;
-        case 'invalid-email':
-          _error = 'Please enter a valid email address.';
-          break;
-        default:
-          _error = 'An error occurred while sending password reset email: ${e.message}';
-      }
-      notifyListeners();
-    } on SocketException {
-      _isLoading = false;
-      _error = 'No internet connection. Please check your connection and try again.';
-      notifyListeners();
-    } catch (e) {
-      _isLoading = false;
-      _error = 'An unexpected error occurred: $e';
-      notifyListeners();
-    }
-  }
-
-  Future<bool> checkEmailVerification() async {
-    try {
-      print('Checking email verification status...');
-      if (_user != null) {
-        print('Current user email: ${_user?.email}');
-        print('Current verification status: ${_user?.emailVerified}');
-        
-        await _user!.reload();
-        _user = _auth.currentUser;
-        
-        print('After reload - User email: ${_user?.email}');
-        print('After reload - Verification status: ${_user?.emailVerified}');
-        
-        return _user?.emailVerified ?? false;
-      }
-      print('No user is currently signed in');
-      return false;
-    } catch (e) {
-      print('Error checking email verification: $e');
-      _error = 'Failed to check email verification status: $e';
-      notifyListeners();
-      return false;
-    }
-  }
-
-  Future<void> resendVerificationEmail() async {
-    try {
-      _isLoading = true;
-      _error = null;
-      notifyListeners();
-
-      print('Attempting to resend verification email...');
-
-      if (_user != null) {
-        print('Sending verification email to: ${_user?.email}');
-        await _user!.sendEmailVerification();
-        print('Verification email sent successfully');
-        _isLoading = false;
-        notifyListeners();
-      } else {
-        print('No user is currently signed in');
-        _error = 'No user is currently signed in.';
-        _isLoading = false;
-        notifyListeners();
-      }
-    } on FirebaseAuthException catch (e) {
-      print('FirebaseAuthException during resend: ${e.code} - ${e.message}');
-      _isLoading = false;
-      _error = 'Failed to send verification email: ${e.message}';
-      notifyListeners();
-    } on SocketException {
-      print('SocketException during resend: No internet connection');
-      _isLoading = false;
-      _error = 'No internet connection. Please check your connection and try again.';
-      notifyListeners();
-    } catch (e) {
-      print('Unexpected error during resend: $e');
-      _isLoading = false;
-      _error = 'An unexpected error occurred: $e';
-      notifyListeners();
     }
   }
 
@@ -415,18 +260,18 @@ class AppAuthProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final invitingUser = _auth.currentUser;
+      final invitingUser = _authService.currentUser;
       if (invitingUser == null) {
         throw 'Inviting user not logged in.';
       }
 
-      final groupDoc = await _firestore.collection('groups').doc(groupId).get();
+      final groupDoc = await FirebaseFirestore.instance.collection('groups').doc(groupId).get();
       if (!groupDoc.exists) {
         throw 'Group does not exist.';
       }
       List<String> currentMembers = List<String>.from(groupDoc.data()?['members'] ?? []);
 
-      final invitedUserSnapshot = await _firestore
+      final invitedUserSnapshot = await FirebaseFirestore.instance
           .collection('users')
           .where('email', isEqualTo: memberEmail)
           .limit(1)
@@ -442,7 +287,7 @@ class AppAuthProvider extends ChangeNotifier {
         throw 'This user is already a member of this group.';
       }
 
-      final existingInvitation = await _firestore
+      final existingInvitation = await FirebaseFirestore.instance
           .collection('group_invitations')
           .where('groupId', isEqualTo: groupId)
           .where('invitedUserId', isEqualTo: invitedUserId)
@@ -454,7 +299,7 @@ class AppAuthProvider extends ChangeNotifier {
         throw 'An invitation to this user for this group is already pending.';
       }
 
-      await _firestore.collection('group_invitations').add({
+      await FirebaseFirestore.instance.collection('group_invitations').add({
         'groupId': groupId,
         'groupName': groupDoc.data()?['name'] ?? 'Unnamed Group',
         'invitedByUserId': invitingUser.uid,
@@ -475,9 +320,9 @@ class AppAuthProvider extends ChangeNotifier {
     _isLoading = true;
     notifyListeners();
     try {
-      await _firestore.runTransaction((transaction) async {
-        final invitationRef = _firestore.collection('group_invitations').doc(invitationId);
-        final groupRef = _firestore.collection('groups').doc(groupId);
+      await FirebaseFirestore.instance.runTransaction((transaction) async {
+        final invitationRef = FirebaseFirestore.instance.collection('group_invitations').doc(invitationId);
+        final groupRef = FirebaseFirestore.instance.collection('groups').doc(groupId);
 
         final invitationDoc = await transaction.get(invitationRef);
         if (!invitationDoc.exists || invitationDoc.data()?['status'] != 'pending') {
@@ -514,7 +359,7 @@ class AppAuthProvider extends ChangeNotifier {
     _isLoading = true;
     notifyListeners();
     try {
-      await _firestore.collection('group_invitations').doc(invitationId).update({
+      await FirebaseFirestore.instance.collection('group_invitations').doc(invitationId).update({
         'status': 'rejected',
         'rejectedAt': FieldValue.serverTimestamp(),
       });
@@ -537,7 +382,7 @@ class AppAuthProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      await _firestore.collection('groups').doc(groupId).collection('expenses').add({
+      await FirebaseFirestore.instance.collection('groups').doc(groupId).collection('expenses').add({
         'description': description,
         'amount': amount,
         'paidBy': paidBy,
@@ -552,23 +397,12 @@ class AppAuthProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> signOut() async {
-    try {
-      _isLoading = true;
-      _error = null;
-      notifyListeners();
-
-      await _auth.signOut();
-      _user = null;
-      _userModel = null;
-      _userSubscription?.cancel();
-
-      _isLoading = false;
-      notifyListeners();
-    } catch (e) {
-      _isLoading = false;
-      _error = 'Failed to sign out: $e';
-      notifyListeners();
+  Future<void> _saveFcmToken() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    final fcmToken = await FirebaseMessaging.instance.getToken();
+    if (fcmToken != null) {
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).update({'fcmToken': fcmToken});
     }
   }
 } 

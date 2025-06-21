@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../models/user_model.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -31,13 +32,23 @@ class AuthService {
         password: password,
       );
 
+      // Update user profile with username
+      await result.user?.updateDisplayName(username);
+
+      // Send email verification
+      await result.user?.sendEmailVerification();
+
       // Create user document in Firestore
-      await _firestore.collection('users').doc(result.user!.uid).set({
-        'username': username,
-        'email': email,
-        'groups': [],
-        'createdAt': FieldValue.serverTimestamp(),
-      });
+      final userModel = UserModel(
+        uid: result.user!.uid,
+        username: username,
+        email: email,
+        groupIds: [],
+        invitationIds: [],
+        createdAt: DateTime.now(),
+      );
+
+      await _firestore.collection('users').doc(result.user!.uid).set(userModel.toMap());
 
       return result;
     } catch (e) {
@@ -77,10 +88,41 @@ class AuthService {
   }
 
   // Get user data
-  Future<Map<String, dynamic>?> getUserData(String uid) async {
+  Future<UserModel?> getUserData(String uid) async {
     try {
       DocumentSnapshot doc = await _firestore.collection('users').doc(uid).get();
-      return doc.data() as Map<String, dynamic>?;
+      if (doc.exists) {
+        return UserModel.fromFirestore(doc);
+      }
+      return null;
+    } catch (e) {
+      throw e.toString();
+    }
+  }
+
+  // Check email verification
+  Future<bool> checkEmailVerification() async {
+    try {
+      await _auth.currentUser?.reload();
+      return _auth.currentUser?.emailVerified ?? false;
+    } catch (e) {
+      throw e.toString();
+    }
+  }
+
+  // Resend verification email
+  Future<void> resendVerificationEmail() async {
+    try {
+      await _auth.currentUser?.sendEmailVerification();
+    } catch (e) {
+      throw e.toString();
+    }
+  }
+
+  // Update user profile
+  Future<void> updateUserProfile(String uid, Map<String, dynamic> data) async {
+    try {
+      await _firestore.collection('users').doc(uid).update(data);
     } catch (e) {
       throw e.toString();
     }
