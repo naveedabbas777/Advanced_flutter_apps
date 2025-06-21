@@ -61,7 +61,8 @@ class GroupService {
 
       // Add user to group
       await _firestore.collection('groups').doc(groupId).update({
-        'members': FieldValue.arrayUnion([userId])
+        'members': FieldValue.arrayUnion([userId]),
+        'memberIds': FieldValue.arrayUnion([userId]),
       });
 
       // Add group to user's groups
@@ -78,7 +79,8 @@ class GroupService {
     try {
       // Remove user from group
       await _firestore.collection('groups').doc(groupId).update({
-        'members': FieldValue.arrayRemove([userId])
+        'members': FieldValue.arrayRemove([userId]),
+        'memberIds': FieldValue.arrayRemove([userId]),
       });
 
       // Remove group from user's groups

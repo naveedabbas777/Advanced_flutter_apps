@@ -13,6 +13,13 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'dart:io';
 import 'group_chat_screen.dart';
 import 'package:badges/badges.dart' as badges;
+import 'package:csv/csv.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:open_file/open_file.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
+import 'package:intl/intl.dart';
+import 'package:fl_chart/fl_chart.dart';
 
 // Re-applying to refresh parsing due to persistent 'Expected an identifier' error.
 class GroupDetailsScreen extends StatefulWidget {
@@ -417,6 +424,88 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                   );
                 },
               ),
+              // Expenses by Category
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Expenses by Category',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ),
+              ),
+              StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('groups')
+                    .doc(widget.groupId)
+                    .collection('expenses')
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                    return const Padding(
+                      padding: EdgeInsets.all(16.0),
+                      child: Text('No expenses to show.'),
+                    );
+                  }
+                  final expenses = snapshot.data!.docs;
+                  final Map<String, double> categoryTotals = {};
+                  for (var doc in expenses) {
+                    final data = doc.data() as Map<String, dynamic>;
+                    final category = data['category'] ?? 'Other';
+                    final amount = (data['amount'] as num?)?.toDouble() ?? 0.0;
+                    categoryTotals[category] = (categoryTotals[category] ?? 0.0) + amount;
+                  }
+                  final colors = [
+                    Colors.blue,
+                    Colors.green,
+                    Colors.orange,
+                    Colors.purple,
+                    Colors.red,
+                    Colors.teal,
+                    Colors.brown,
+                    Colors.pink,
+                  ];
+                  final categoryList = categoryTotals.entries.toList();
+                  return Column(
+                    children: [
+                      SizedBox(
+                        height: 200,
+                        child: PieChart(
+                          PieChartData(
+                            sections: [
+                              for (int i = 0; i < categoryList.length; i++)
+                                PieChartSectionData(
+                                  color: colors[i % colors.length],
+                                  value: categoryList[i].value,
+                                  title: categoryList[i].key,
+                                  radius: 60,
+                                  titleStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
+                                ),
+                            ],
+                            sectionsSpace: 2,
+                            centerSpaceRadius: 32,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      ...categoryList.map((e) => Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Row(
+                                children: [
+                                  Container(width: 16, height: 16, color: colors[categoryList.indexOf(e) % colors.length]),
+                                  const SizedBox(width: 8),
+                                  Text(e.key, style: Theme.of(context).textTheme.bodyMedium),
+                                ],
+                              ),
+                              Text('₹${e.value.toStringAsFixed(2)}', style: Theme.of(context).textTheme.bodyMedium),
+                            ],
+                          )),
+                    ],
+                  );
+                },
+              ),
               // Expenses History Section
               Padding(
                 padding:
@@ -802,6 +891,93 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                     }
                   },
                 ),
+              ListTile(
+                leading: const Icon(Icons.file_download),
+                title: const Text('Export Expenses'),
+                onTap: () async {
+                  Navigator.pop(context);
+                  final format = await showDialog<String>(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: const Text('Export Expenses'),
+                      content: const Text('Choose export format:'),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, 'csv'),
+                          child: const Text('CSV'),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, 'pdf'),
+                          child: const Text('PDF'),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (format == null) return;
+                  try {
+                    // Fetch expenses
+                    final expensesSnapshot = await FirebaseFirestore.instance
+                        .collection('groups')
+                        .doc(group.id)
+                        .collection('expenses')
+                        .orderBy('timestamp', descending: false)
+                        .get();
+                    // Fetch user info for paidBy
+                    final userIds = expensesSnapshot.docs.map((doc) => doc['paidBy'] as String?).whereType<String>().toSet().toList();
+                    final usersSnapshot = await FirebaseFirestore.instance.collection('users').where(FieldPath.documentId, whereIn: userIds).get();
+                    final userMap = {for (var doc in usersSnapshot.docs) doc.id: doc.data()['username'] ?? doc.id};
+                    final dateFormat = DateFormat('yyyy-MM-dd HH:mm');
+                    List<List<dynamic>> rows = [
+                      ['Date', 'Title/Description', 'Amount', 'Paid By', 'Split Type', 'Notes'],
+                    ];
+                    for (var doc in expensesSnapshot.docs) {
+                      final data = doc.data();
+                      DateTime? dateObj;
+                      if (data['expenseDate'] != null) {
+                        dateObj = (data['expenseDate'] as Timestamp).toDate();
+                      } else if (data['timestamp'] != null) {
+                        dateObj = (data['timestamp'] as Timestamp).toDate();
+                      }
+                      final date = dateObj != null ? dateFormat.format(dateObj) : '';
+                      final paidByName = userMap[data['paidBy']] ?? data['paidBy'] ?? '';
+                      rows.add([
+                        date,
+                        data['description'] ?? data['title'] ?? '',
+                        data['amount'] ?? '',
+                        paidByName,
+                        data['splitType'] ?? '',
+                        data['notes'] ?? '',
+                      ]);
+                    }
+                    if (format == 'csv') {
+                      String csvData = const ListToCsvConverter().convert(rows);
+                      final dir = await getTemporaryDirectory();
+                      final file = File('${dir.path}/${group.name}_expenses.csv');
+                      await file.writeAsString(csvData);
+                      await OpenFile.open(file.path);
+                    } else if (format == 'pdf') {
+                      final pdf = pw.Document();
+                      pdf.addPage(
+                        pw.Page(
+                          build: (pw.Context context) => pw.Table.fromTextArray(
+                            data: rows,
+                            headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                            cellAlignment: pw.Alignment.centerLeft,
+                          ),
+                        ),
+                      );
+                      final dir = await getTemporaryDirectory();
+                      final file = File('${dir.path}/${group.name}_expenses.pdf');
+                      await file.writeAsBytes(await pdf.save());
+                      await OpenFile.open(file.path);
+                    }
+                  } catch (e) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Failed to export: $e')),
+                    );
+                  }
+                },
+              ),
             ],
           ),
         );

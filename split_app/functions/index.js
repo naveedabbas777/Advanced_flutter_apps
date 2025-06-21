@@ -1,32 +1,80 @@
-/**
- * Import function triggers from their respective submodules:
- *
- * const {onCall} = require("firebase-functions/v2/https");
- * const {onDocumentWritten} = require("firebase-functions/v2/firestore");
- *
- * See a full list of supported triggers at https://firebase.google.com/docs/functions
- */
+const functions = require("firebase-functions");
+const admin = require("firebase-admin");
+admin.initializeApp();
 
-const {setGlobalOptions} = require("firebase-functions");
-const {onRequest} = require("firebase-functions/https");
-const logger = require("firebase-functions/logger");
+// Send notification on group invitation
+exports.sendGroupInvitationNotification = functions.firestore
+  .document("group_invitations/{invitationId}")
+  .onCreate(async (snap, context) => {
+    const data = snap.data();
+    const invitedUserId = data.invitedUserId;
+    const groupName = data.groupName;
 
-// For cost control, you can set the maximum number of containers that can be
-// running at the same time. This helps mitigate the impact of unexpected
-// traffic spikes by instead downgrading performance. This limit is a
-// per-function limit. You can override the limit for each function using the
-// `maxInstances` option in the function's options, e.g.
-// `onRequest({ maxInstances: 5 }, (req, res) => { ... })`.
-// NOTE: setGlobalOptions does not apply to functions using the v1 API. V1
-// functions should each use functions.runWith({ maxInstances: 10 }) instead.
-// In the v1 API, each function can only serve one request per container, so
-// this will be the maximum concurrent request count.
-setGlobalOptions({ maxInstances: 10 });
+    // Get the invited user's FCM token
+    const userDoc = await admin
+      .firestore()
+      .collection("users")
+      .doc(invitedUserId)
+      .get();
+    const fcmToken = userDoc.data().fcmToken;
+    if (!fcmToken) return null;
 
-// Create and deploy your first functions
-// https://firebase.google.com/docs/functions/get-started
+    const payload = {
+      notification: {
+        title: "Group Invitation",
+        body: `You have been invited to join "${groupName}"`,
+      },
+      data: {
+        type: "invitation",
+        groupId: data.groupId,
+      },
+    };
 
-// exports.helloWorld = onRequest((request, response) => {
-//   logger.info("Hello logs!", {structuredData: true});
-//   response.send("Hello from Firebase!");
-// });
+    return admin.messaging().sendToDevice(fcmToken, payload);
+  });
+
+// Send notification on new group message
+exports.sendNewGroupMessageNotification = functions.firestore
+  .document("groups/{groupId}/messages/{messageId}")
+  .onCreate(async (snap, context) => {
+    const data = snap.data();
+    const groupId = context.params.groupId;
+    const senderId = data.senderId;
+    const messageText = data.text || "You have a new message";
+
+    // Get group members except sender
+    const groupDoc = await admin
+      .firestore()
+      .collection("groups")
+      .doc(groupId)
+      .get();
+    const memberIds = groupDoc.data().memberIds || [];
+    const recipients = memberIds.filter((uid) => uid !== senderId);
+
+    // Fetch FCM tokens for all recipients
+    const tokens = [];
+    for (const uid of recipients) {
+      const userDoc = await admin
+        .firestore()
+        .collection("users")
+        .doc(uid)
+        .get();
+      if (userDoc.exists && userDoc.data().fcmToken) {
+        tokens.push(userDoc.data().fcmToken);
+      }
+    }
+    if (tokens.length === 0) return null;
+
+    const payload = {
+      notification: {
+        title: "New Group Message",
+        body: messageText,
+      },
+      data: {
+        type: "group_message",
+        groupId: groupId,
+      },
+    };
+
+    return admin.messaging().sendToDevice(tokens, payload);
+  });

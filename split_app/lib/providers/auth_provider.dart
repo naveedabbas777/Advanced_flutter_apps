@@ -16,6 +16,12 @@ class AppAuthProvider extends ChangeNotifier {
   bool _isLoading = false;
   String? _error;
   StreamSubscription<DocumentSnapshot>? _userSubscription;
+  List<String> _pinnedGroups = [];
+  List<String> _pinnedChats = [];
+  List<String> _mutedGroups = [];
+  List<String> _mutedChats = [];
+  List<String> _archivedGroups = [];
+  List<String> _archivedChats = [];
 
   User? get currentUser => _user;
   UserModel? get userModel => _userModel;
@@ -23,12 +29,19 @@ class AppAuthProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get error => _error;
   bool get isEmailVerified => _user?.emailVerified ?? false;
+  List<String> get pinnedGroups => _pinnedGroups;
+  List<String> get pinnedChats => _pinnedChats;
+  List<String> get mutedGroups => _mutedGroups;
+  List<String> get mutedChats => _mutedChats;
+  List<String> get archivedGroups => _archivedGroups;
+  List<String> get archivedChats => _archivedChats;
 
   AppAuthProvider() {
     _authService.authStateChanges.listen((User? user) async {
       _user = user;
       if (user != null) {
         await _setupUserListener();
+        await _updateLastActive();
       } else {
         _userModel = null;
         _userSubscription?.cancel();
@@ -55,6 +68,13 @@ class AppAuthProvider extends ChangeNotifier {
     });
   }
 
+  Future<void> _updateLastActive() async {
+    if (_user == null) return;
+    await FirebaseFirestore.instance.collection('users').doc(_user!.uid).update({
+      'lastActive': FieldValue.serverTimestamp(),
+    });
+  }
+
   Future<void> register(String email, String password, String username) async {
     try {
       _isLoading = true;
@@ -63,6 +83,7 @@ class AppAuthProvider extends ChangeNotifier {
 
       await _authService.registerWithEmailAndPassword(email, password, username);
       await _saveFcmToken();
+      await _updateLastActive();
       _isLoading = false;
       notifyListeners();
     } catch (e) {
@@ -80,6 +101,7 @@ class AppAuthProvider extends ChangeNotifier {
 
       await _authService.signInWithEmailAndPassword(email, password);
       await _saveFcmToken();
+      await _updateLastActive();
       bool isVerified = await _authService.checkEmailVerification();
       if (!isVerified) {
         await _authService.signOut();
@@ -404,5 +426,91 @@ class AppAuthProvider extends ChangeNotifier {
     if (fcmToken != null) {
       await FirebaseFirestore.instance.collection('users').doc(user.uid).update({'fcmToken': fcmToken});
     }
+  }
+
+  Future<void> loadPinned() async {
+    if (_user == null) return;
+    final doc = await FirebaseFirestore.instance.collection('users').doc(_user!.uid).get();
+    final data = doc.data();
+    _pinnedGroups = List<String>.from(data?['pinnedGroups'] ?? []);
+    _pinnedChats = List<String>.from(data?['pinnedChats'] ?? []);
+    notifyListeners();
+  }
+
+  Future<void> togglePinGroup(String groupId) async {
+    if (_user == null) return;
+    if (_pinnedGroups.contains(groupId)) {
+      _pinnedGroups.remove(groupId);
+    } else {
+      _pinnedGroups.add(groupId);
+    }
+    await FirebaseFirestore.instance.collection('users').doc(_user!.uid).update({'pinnedGroups': _pinnedGroups});
+    notifyListeners();
+  }
+
+  Future<void> togglePinChat(String chatId) async {
+    if (_user == null) return;
+    if (_pinnedChats.contains(chatId)) {
+      _pinnedChats.remove(chatId);
+    } else {
+      _pinnedChats.add(chatId);
+    }
+    await FirebaseFirestore.instance.collection('users').doc(_user!.uid).update({'pinnedChats': _pinnedChats});
+    notifyListeners();
+  }
+
+  Future<void> loadMuteArchive() async {
+    if (_user == null) return;
+    final doc = await FirebaseFirestore.instance.collection('users').doc(_user!.uid).get();
+    final data = doc.data();
+    _mutedGroups = List<String>.from(data?['mutedGroups'] ?? []);
+    _mutedChats = List<String>.from(data?['mutedChats'] ?? []);
+    _archivedGroups = List<String>.from(data?['archivedGroups'] ?? []);
+    _archivedChats = List<String>.from(data?['archivedChats'] ?? []);
+    notifyListeners();
+  }
+
+  Future<void> toggleMuteGroup(String groupId) async {
+    if (_user == null) return;
+    if (_mutedGroups.contains(groupId)) {
+      _mutedGroups.remove(groupId);
+    } else {
+      _mutedGroups.add(groupId);
+    }
+    await FirebaseFirestore.instance.collection('users').doc(_user!.uid).update({'mutedGroups': _mutedGroups});
+    notifyListeners();
+  }
+
+  Future<void> toggleMuteChat(String chatId) async {
+    if (_user == null) return;
+    if (_mutedChats.contains(chatId)) {
+      _mutedChats.remove(chatId);
+    } else {
+      _mutedChats.add(chatId);
+    }
+    await FirebaseFirestore.instance.collection('users').doc(_user!.uid).update({'mutedChats': _mutedChats});
+    notifyListeners();
+  }
+
+  Future<void> toggleArchiveGroup(String groupId) async {
+    if (_user == null) return;
+    if (_archivedGroups.contains(groupId)) {
+      _archivedGroups.remove(groupId);
+    } else {
+      _archivedGroups.add(groupId);
+    }
+    await FirebaseFirestore.instance.collection('users').doc(_user!.uid).update({'archivedGroups': _archivedGroups});
+    notifyListeners();
+  }
+
+  Future<void> toggleArchiveChat(String chatId) async {
+    if (_user == null) return;
+    if (_archivedChats.contains(chatId)) {
+      _archivedChats.remove(chatId);
+    } else {
+      _archivedChats.add(chatId);
+    }
+    await FirebaseFirestore.instance.collection('users').doc(_user!.uid).update({'archivedChats': _archivedChats});
+    notifyListeners();
   }
 } 

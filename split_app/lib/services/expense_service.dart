@@ -12,6 +12,8 @@ class ExpenseService {
     required double amount,
     required String paidBy,
     String? notes,
+    String? imageUrl,
+    String? category,
   }) async {
     try {
       await _firestore
@@ -24,6 +26,8 @@ class ExpenseService {
         'paidBy': paidBy,
         'date': FieldValue.serverTimestamp(),
         'notes': notes,
+        'imageUrl': imageUrl,
+        'category': category,
         'createdBy': _auth.currentUser!.uid,
       });
     } catch (e) {

@@ -23,30 +23,15 @@ class GroupProvider extends ChangeNotifier {
     super.dispose();
   }
 
+  // Returns a stream of groups where the user is a member (faster, scalable)
   Stream<List<GroupModel>> getUserGroupsStream(String userId) {
-    return _firestore.collection('users').doc(userId).snapshots().asyncExpand((userDoc) {
-      if (!userDoc.exists || userDoc.data()?['groupIds'] == null) {
-        return Stream.value(<GroupModel>[]);
-      }
-      final List<String> groupIds = List<String>.from(userDoc.data()!['groupIds']);
-
-      if (groupIds.isEmpty) {
-        return Stream.value(<GroupModel>[]);
-      }
-
-      // Create a list of streams for each group
-      final groupStreams = groupIds.map((id) => 
-        _firestore.collection('groups').doc(id).snapshots()
-      ).toList();
-
-      // Use Rx.combineLatestList to combine the streams
-      return Rx.combineLatestList<DocumentSnapshot>(
-        groupStreams,
-      ).map((snapshots) => snapshots
-          .where((snapshot) => snapshot.exists)
-          .map((snapshot) => GroupModel.fromFirestore(snapshot))
-          .toList());
-    });
+    return _firestore
+        .collection('groups')
+        .where('memberIds', arrayContains: userId)
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+            .map((doc) => GroupModel.fromFirestore(doc))
+            .toList());
   }
 
   Future<void> createGroup(String name, UserModel creator, {String? photoUrl}) async {
@@ -54,7 +39,7 @@ class GroupProvider extends ChangeNotifier {
       _setLoading(true);
       _error = null;
 
-      // Create group document
+      // Create group document with memberIds array for fast lookup
       final groupRef = await _firestore.collection('groups').add({
         'name': name,
         'createdBy': creator.uid,
@@ -68,6 +53,7 @@ class GroupProvider extends ChangeNotifier {
             'joinedAt': Timestamp.fromDate(DateTime.now()),
           }
         ],
+        'memberIds': [creator.uid],
         if (photoUrl != null) 'photoUrl': photoUrl,
       });
 
@@ -193,6 +179,7 @@ class GroupProvider extends ChangeNotifier {
             'joinedAt': Timestamp.fromDate(DateTime.now()),
           }
         ]),
+        'memberIds': FieldValue.arrayUnion([user.uid]),
       });
 
       // Add group to user's groups list
@@ -278,6 +265,7 @@ class GroupProvider extends ChangeNotifier {
 
       await _firestore.collection('groups').doc(groupId).update({
         'members': FieldValue.arrayRemove([memberToRemove.toMap()]),
+        'memberIds': FieldValue.arrayRemove([userId]),
       });
 
       // Remove group from user's groups list
