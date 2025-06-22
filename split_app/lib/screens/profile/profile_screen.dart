@@ -169,6 +169,68 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     subtitle: Text(userModel.email),
                   ),
                   Divider(),
+                  // Group summary counts
+                  StreamBuilder<List<GroupModel>>(
+                    stream: Provider.of<GroupProvider>(context, listen: false).getUserGroupsStream(userModel.uid),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      if (snapshot.hasError) {
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                          child: Text('Error loading groups: \\${snapshot.error}', style: TextStyle(color: Colors.red)),
+                        );
+                      }
+                      final groups = snapshot.data ?? [];
+                      final adminCount = groups.where((g) => g.members.any((m) => m.userId == userModel.uid && m.isAdmin)).length;
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 8.0),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: [
+                            Expanded(
+                              child: Card(
+                                color: Theme.of(context).colorScheme.primaryContainer,
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 20.0),
+                                  child: Column(
+                                    children: [
+                                      Text(
+                                        '${groups.length}',
+                                        style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary),
+                                      ),
+                                      SizedBox(height: 4),
+                                      Text('Groups\nMember', textAlign: TextAlign.center, style: TextStyle(fontSize: 14)),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                            SizedBox(width: 12),
+                            Expanded(
+                              child: Card(
+                                color: Theme.of(context).colorScheme.secondaryContainer,
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 20.0),
+                                  child: Column(
+                                    children: [
+                                      Text(
+                                        '$adminCount',
+                                        style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.secondary),
+                                      ),
+                                      SizedBox(height: 4),
+                                      Text('Groups\nAdmin', textAlign: TextAlign.center, style: TextStyle(fontSize: 14)),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
                   ListTile(
                     leading: const Icon(Icons.group),
                     title: const Text('My Groups'),
@@ -186,7 +248,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       if (snapshot.hasError) {
                         return Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                          child: Text('Error loading groups: ${snapshot.error}', style: TextStyle(color: Colors.red)),
+                          child: Text('Error loading groups: \\${snapshot.error}', style: TextStyle(color: Colors.red)),
                         );
                       }
                       if (!snapshot.hasData || snapshot.data!.isEmpty) {
@@ -202,8 +264,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         itemBuilder: (context, index) {
                           final group = snapshot.data![index];
                           return ListTile(
-                            title: Text(group.name),
-                            subtitle: Text('Members: ${group.members.length}'),
+                            title: Text(group.name, style: TextStyle(fontWeight: FontWeight.w500)),
                             onTap: () {
                               // Navigate to group details screen
                               Navigator.pushNamed(context, '/group-details', arguments: {'groupId': group.id, 'groupName': group.name});

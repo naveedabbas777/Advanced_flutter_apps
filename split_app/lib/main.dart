@@ -14,6 +14,7 @@ import 'screens/groups/add_member_screen.dart';
 import 'screens/groups/group_details_screen.dart';
 import 'screens/groups/create_group_screen.dart';
 import 'screens/auth/forgot_password_screen.dart';
+import 'screens/expenses/edit_expense_screen.dart';
 
 import 'providers/auth_provider.dart';
 import 'providers/theme_provider.dart';
@@ -105,6 +106,12 @@ class MyApp extends StatelessWidget {
                   );
                 case '/create-group':
                   return MaterialPageRoute(builder: (_) => CreateGroupScreen());
+                case '/edit-expense':
+                  final args = settings.arguments as Map<String, dynamic>;
+                  return MaterialPageRoute(
+                    builder: (_) => EditExpenseScreen(),
+                    settings: settings,
+                  );
                 default:
                   return MaterialPageRoute(
                     builder: (_) => Scaffold(

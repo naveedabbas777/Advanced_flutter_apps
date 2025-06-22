@@ -48,6 +48,7 @@ class GroupModel {
   final String? photoUrl;
   final String? lastMessage;
   final DateTime? lastMessageTime;
+  final int expenseCount;
 
   GroupModel({
     required this.id,
@@ -59,6 +60,7 @@ class GroupModel {
     this.photoUrl,
     this.lastMessage,
     this.lastMessageTime,
+    this.expenseCount = 0,
   });
 
   factory GroupModel.fromFirestore(DocumentSnapshot doc) {
@@ -76,6 +78,7 @@ class GroupModel {
       photoUrl: data['photoUrl'],
       lastMessage: data['lastMessage'],
       lastMessageTime: (data['lastMessageTime'] as Timestamp?)?.toDate(),
+      expenseCount: data['expenseCount'] ?? 0,
     );
   }
 
@@ -89,6 +92,7 @@ class GroupModel {
       if (photoUrl != null) 'photoUrl': photoUrl,
       'lastMessage': lastMessage,
       'lastMessageTime': lastMessageTime != null ? Timestamp.fromDate(lastMessageTime!) : null,
+      'expenseCount': expenseCount,
     };
   }
 
@@ -102,6 +106,7 @@ class GroupModel {
     String? photoUrl,
     String? lastMessage,
     DateTime? lastMessageTime,
+    int? expenseCount,
   }) {
     return GroupModel(
       id: id ?? this.id,
@@ -113,6 +118,7 @@ class GroupModel {
       photoUrl: photoUrl ?? this.photoUrl,
       lastMessage: lastMessage ?? this.lastMessage,
       lastMessageTime: lastMessageTime ?? this.lastMessageTime,
+      expenseCount: expenseCount ?? this.expenseCount,
     );
   }
 
@@ -127,6 +133,7 @@ class GroupModel {
       'photoUrl': photoUrl,
       'lastMessage': lastMessage,
       'lastMessageTime': lastMessageTime?.toIso8601String(),
+      'expenseCount': expenseCount,
     };
   }
 
@@ -145,6 +152,7 @@ class GroupModel {
       lastMessageTime: json['lastMessageTime'] != null
           ? DateTime.parse(json['lastMessageTime'])
           : null,
+      expenseCount: json['expenseCount'] ?? 0,
     );
   }
 } 

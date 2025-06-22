@@ -6,6 +6,7 @@ import 'package:split_app/providers/auth_provider.dart';
 import 'package:split_app/screens/groups/create_group_screen.dart';
 import 'package:split_app/screens/groups/group_details_screen.dart';
 import 'package:intl/intl.dart';
+import 'package:badges/badges.dart' as badges;
 
 class GroupsTab extends StatefulWidget {
   @override
@@ -116,26 +117,75 @@ class _GroupsTabState extends State<GroupsTab> {
                             itemBuilder: (context, index) {
                               final filteredGroups = _groups.where((g) => g.name.toLowerCase().contains(_groupSearch)).toList();
                               final group = filteredGroups[index];
-                              return ListTile(
-                                leading: CircleAvatar(
-                                  child: Text(group.name.isNotEmpty ? group.name.substring(0, 1).toUpperCase() : '?'),
+                              final admin = group.members.firstWhere(
+                                (m) => m.isAdmin,
+                                orElse: () => GroupMember(
+                                  userId: '',
+                                  username: 'N/A',
+                                  email: '',
+                                  isAdmin: false,
+                                  joinedAt: DateTime.now(),
                                 ),
-                                title: Text(group.name),
-                                subtitle: Text(
-                                  group.lastMessage ?? 'No messages yet.',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                trailing: group.lastMessageTime != null
-                                    ? Text(
-                                        DateFormat.jm().format(group.lastMessageTime!),
-                                        style: TextStyle(fontSize: 12, color: Colors.grey),
-                                      )
-                                    : null,
-                                onTap: () {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (_) => GroupDetailsScreen(groupId: group.id),
+                              );
+                              final user = Provider.of<AppAuthProvider>(context, listen: false).currentUser;
+                              final userId = user?.uid ?? '';
+
+                              return FutureBuilder<List<int>>(
+                                future: _getUnseenCounts(group.id, userId),
+                                builder: (context, snapshot) {
+                                  int unseenMessages = 0;
+                                  int unseenExpenses = 0;
+                                  if (snapshot.hasData) {
+                                    unseenMessages = snapshot.data![0];
+                                    unseenExpenses = snapshot.data![1];
+                                  }
+                                  return Card(
+                                    margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    elevation: 2,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                    child: ListTile(
+                                      leading: badges.Badge(
+                                        showBadge: unseenMessages > 0,
+                                        badgeContent: Text('$unseenMessages', style: const TextStyle(color: Colors.white, fontSize: 10)),
+                                        position: badges.BadgePosition.topEnd(top: -8, end: -8),
+                                        child: badges.Badge(
+                                          showBadge: unseenExpenses > 0,
+                                          badgeContent: Text('$unseenExpenses', style: const TextStyle(color: Colors.white, fontSize: 10)),
+                                          position: badges.BadgePosition.bottomEnd(bottom: -8, end: -8),
+                                          child: CircleAvatar(
+                                            child: Text(group.name.isNotEmpty ? group.name.substring(0, 1).toUpperCase() : '?'),
+                                          ),
+                                        ),
+                                      ),
+                                      title: Text(group.name, style: TextStyle(fontWeight: FontWeight.bold)),
+                                      subtitle: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            group.lastMessage ?? 'No messages yet.',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          SizedBox(height: 4),
+                                          Text(
+                                            '${group.members.length} Members | Admin: ${admin.username} | ${group.expenseCount} Expenses',
+                                            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                                          ),
+                                        ],
+                                      ),
+                                      trailing: group.lastMessageTime != null
+                                          ? Text(
+                                              DateFormat.jm().format(group.lastMessageTime!),
+                                              style: TextStyle(fontSize: 12, color: Colors.grey),
+                                            )
+                                          : null,
+                                      onTap: () {
+                                        Navigator.of(context).push(
+                                          MaterialPageRoute(
+                                            builder: (_) => GroupDetailsScreen(groupId: group.id),
+                                          ),
+                                        );
+                                      },
                                     ),
                                   );
                                 },
@@ -146,5 +196,62 @@ class _GroupsTabState extends State<GroupsTab> {
         ),
       ],
     );
+  }
+
+  Future<List<int>> _getUnseenCounts(String groupId, String userId) async {
+    int unseenMessages = 0;
+    int unseenExpenses = 0;
+    // Get last seen for messages
+    final chatViewDoc = await FirebaseFirestore.instance
+        .collection('groups')
+        .doc(groupId)
+        .collection('chatViews')
+        .doc(userId)
+        .get();
+    Timestamp? lastSeenMsg;
+    if (chatViewDoc.exists) {
+      lastSeenMsg = chatViewDoc['lastSeen'] as Timestamp?;
+    }
+    final msgQuery = await FirebaseFirestore.instance
+        .collection('group_messages')
+        .where('groupId', isEqualTo: groupId)
+        .orderBy('timestamp', descending: false)
+        .get();
+    if (lastSeenMsg != null) {
+      unseenMessages = msgQuery.docs.where((doc) {
+        final ts = doc['timestamp'] as Timestamp?;
+        final senderId = doc['senderId'] as String?;
+        return ts != null && lastSeenMsg != null && ts.toDate().isAfter(lastSeenMsg.toDate()) && senderId != userId;
+      }).length;
+    } else {
+      unseenMessages = msgQuery.docs.where((doc) => doc['senderId'] != userId).length;
+    }
+    // Get last seen for expenses
+    final expenseViewDoc = await FirebaseFirestore.instance
+        .collection('groups')
+        .doc(groupId)
+        .collection('expenseViews')
+        .doc(userId)
+        .get();
+    Timestamp? lastSeenExpense;
+    if (expenseViewDoc.exists) {
+      lastSeenExpense = expenseViewDoc['lastSeen'] as Timestamp?;
+    }
+    final expenseQuery = await FirebaseFirestore.instance
+        .collection('groups')
+        .doc(groupId)
+        .collection('expenses')
+        .orderBy('timestamp', descending: false)
+        .get();
+    if (lastSeenExpense != null) {
+      unseenExpenses = expenseQuery.docs.where((doc) {
+        final ts = doc['timestamp'] as Timestamp?;
+        final addedBy = doc['addedBy'] as String?;
+        return ts != null && lastSeenExpense != null && ts.toDate().isAfter(lastSeenExpense.toDate()) && addedBy != userId;
+      }).length;
+    } else {
+      unseenExpenses = expenseQuery.docs.where((doc) => doc['addedBy'] != userId).length;
+    }
+    return [unseenMessages, unseenExpenses];
   }
 }

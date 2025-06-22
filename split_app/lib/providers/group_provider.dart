@@ -332,6 +332,11 @@ class GroupProvider extends ChangeNotifier {
         'timestamp': FieldValue.serverTimestamp(),
       });
 
+      // After adding the expense, update the expense count on the group
+      await _firestore.collection('groups').doc(groupId).update({
+        'expenseCount': FieldValue.increment(1),
+      });
+
       _isLoading = false;
       notifyListeners();
     } catch (e) {
