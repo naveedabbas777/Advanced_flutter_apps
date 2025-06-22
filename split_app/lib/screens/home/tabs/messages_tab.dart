@@ -90,80 +90,38 @@ class _MessagesTabState extends State<MessagesTab> {
         Expanded(
           child: user == null
               ? const Center(child: Text('User not logged in.'))
-              : StreamBuilder<QuerySnapshot>(
-                  stream: FirebaseFirestore.instance
-                      .collection('direct_chats')
-                      .where('participants', arrayContains: user.uid)
-                      .orderBy('lastMessageTime', descending: true)
-                      .snapshots(),
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-                    if (snapshot.hasError) {
-                      return Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16.0),
-                          child: Text('Error loading chats: \\${snapshot.error}', textAlign: TextAlign.center),
-                        ),
-                      );
-                    }
-                    final chats = snapshot.data?.docs.map((doc) => DirectChat.fromFirestore(doc)).toList() ?? [];
-                    if (chats.isEmpty) {
-                      return Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.chat_bubble_outline, size: 48, color: Colors.grey),
-                            SizedBox(height: 12),
-                            Text('No direct messages yet.', style: TextStyle(fontSize: 18, color: Colors.grey)),
-                          ],
-                        ),
-                      );
-                    }
-                    return RefreshIndicator(
-                      onRefresh: _fetchChats,
-                      child: ListView.builder(
-                        itemCount: chats.length,
-                        itemBuilder: (context, index) {
-                          final chat = chats[index];
-                          final otherUserId = chat.participants.firstWhere((id) => id != user.uid, orElse: () => '');
-                          return FutureBuilder<DocumentSnapshot>(
-                            future: FirebaseFirestore.instance.collection('users').doc(otherUserId).get(),
-                            builder: (context, userSnapshot) {
-                              if (!userSnapshot.hasData || !userSnapshot.data!.exists) {
-                                return ListTile(title: Text('Unknown User'), subtitle: Text(chat.lastMessage));
-                              }
-                              final userData = userSnapshot.data!.data() as Map<String, dynamic>;
-                              final otherUserName = userData['username'] ?? 'Unknown';
-                              if (_chatSearch.isNotEmpty && !otherUserName.toLowerCase().contains(_chatSearch)) {
-                                return Container();
-                              }
-                              return ListTile(
-                                leading: CircleAvatar(child: Text(otherUserName.substring(0, 1).toUpperCase())),
-                                title: Text(otherUserName),
-                                subtitle: Text(chat.lastMessage, maxLines: 1, overflow: TextOverflow.ellipsis),
-                                trailing: chat.lastMessageTime != null
-                                    ? Text(DateFormat.jm().format(chat.lastMessageTime))
-                                    : null,
-                                onTap: () {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (_) => DirectChatScreen(
-                                        chatId: chat.id,
-                                        otherUserId: otherUserId,
-                                        otherUserName: otherUserName,
-                                      ),
-                                    ),
-                                  );
-                                },
-                              );
-                            },
+              : RefreshIndicator(
+                  onRefresh: _fetchChats,
+                  child: ListView.builder(
+                    itemCount: _chats.length,
+                    itemBuilder: (context, index) {
+                      final chat = DirectChat.fromFirestore(_chats[index]);
+                      final otherUserId = chat.participants.firstWhere((id) => id != user.uid, orElse: () => '');
+                      final otherUserName = chat.participantUsernames[otherUserId] ?? 'Unknown';
+                      if (_chatSearch.isNotEmpty && !otherUserName.toLowerCase().contains(_chatSearch)) {
+                        return Container();
+                      }
+                      return ListTile(
+                        leading: CircleAvatar(child: Text(otherUserName.substring(0, 1).toUpperCase())),
+                        title: Text(otherUserName),
+                        subtitle: Text(chat.lastMessage, maxLines: 1, overflow: TextOverflow.ellipsis),
+                        trailing: chat.lastMessageTime != null
+                            ? Text(DateFormat.jm().format(chat.lastMessageTime))
+                            : null,
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => DirectChatScreen(
+                                chatId: chat.id,
+                                otherUserId: otherUserId,
+                                otherUserName: otherUserName,
+                              ),
+                            ),
                           );
                         },
-                      ),
-                    );
-                  },
+                      );
+                    },
+                  ),
                 ),
         ),
       ],

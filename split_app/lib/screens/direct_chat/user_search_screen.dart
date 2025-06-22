@@ -42,10 +42,17 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
     final currentUserId = widget.currentUserId;
     final chatId = [currentUserId, otherUserId]..sort();
     final chatDocId = chatId.join('_');
-    // Ensure chat document exists
+    // Fetch current user's username
+    final currentUserDoc = await FirebaseFirestore.instance.collection('users').doc(currentUserId).get();
+    final currentUserName = currentUserDoc['username'] ?? '';
+    // Ensure chat document exists with usernames
     final chatDoc = FirebaseFirestore.instance.collection('direct_chats').doc(chatDocId);
     await chatDoc.set({
       'participants': [currentUserId, otherUserId],
+      'participantUsernames': {
+        currentUserId: currentUserName,
+        otherUserId: otherUserName,
+      },
       'lastMessageTime': FieldValue.serverTimestamp(),
       'lastMessage': '',
     }, SetOptions(merge: true));
