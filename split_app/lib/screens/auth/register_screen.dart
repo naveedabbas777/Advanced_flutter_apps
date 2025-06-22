@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 // import 'package:webview_flutter/webview_flutter.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/theme_provider.dart';
+import 'dart:async';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -18,6 +20,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
   bool _isRegistered = false;
+  Timer? _verificationCheckTimer;
+  bool _isEmailVerified = false;
   // String? _recaptchaToken;
   // bool _isRecaptchaVerified = false;
 
@@ -26,7 +30,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _nameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
+    _verificationCheckTimer?.cancel();
     super.dispose();
+  }
+
+  void _startVerificationCheck() {
+    _verificationCheckTimer = Timer.periodic(Duration(seconds: 3), (timer) async {
+      await FirebaseAuth.instance.currentUser?.reload();
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null && user.emailVerified) {
+        setState(() {
+          _isEmailVerified = true;
+        });
+        timer.cancel();
+        // Optionally, navigate to login or home automatically:
+        // Navigator.pushReplacementNamed(context, '/login');
+      }
+    });
   }
 
   Future<void> _register() async {
@@ -42,6 +62,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         setState(() {
           _isRegistered = true;
         });
+        _startVerificationCheck();
       } else {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -282,12 +303,35 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ),
                     child: const Text('Resend Verification Email'),
                   ),
+                  const SizedBox(height: 24),
+                  if (!_isEmailVerified)
+                    Text(
+                      'Waiting for email verification... You cannot continue until your email is verified.',
+                      style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold),
+                      textAlign: TextAlign.center,
+                    ),
+                  if (_isEmailVerified)
+                    Column(
+                      children: [
+                        Text(
+                          'Email verified! You can now log in.',
+                          style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
+                          textAlign: TextAlign.center,
+                        ),
+                        SizedBox(height: 12),
+                        ElevatedButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: Text('Back to Login'),
+                        ),
+                      ],
+                    ),
                 ],
                 const SizedBox(height: 16),
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Back to Login'),
-                ),
+                if (!_isRegistered || _isEmailVerified)
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Back to Login'),
+                  ),
                 const SizedBox(height: 16),
                 IconButton(
                   onPressed: () {

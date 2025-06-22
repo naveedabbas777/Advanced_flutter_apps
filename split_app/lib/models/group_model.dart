@@ -21,7 +21,9 @@ class GroupMember {
       username: map['username'] as String,
       email: map['email'] as String,
       isAdmin: map['isAdmin'] as bool,
-      joinedAt: (map['joinedAt'] as Timestamp).toDate(),
+      joinedAt: map['joinedAt'] is String
+          ? DateTime.parse(map['joinedAt'])
+          : (map['joinedAt'] as Timestamp).toDate(),
     );
   }
 
@@ -31,7 +33,7 @@ class GroupMember {
       'username': username,
       'email': email,
       'isAdmin': isAdmin,
-      'joinedAt': Timestamp.fromDate(joinedAt),
+      'joinedAt': joinedAt.toIso8601String(),
     };
   }
 }
@@ -42,7 +44,10 @@ class GroupModel {
   final String createdBy;
   final DateTime createdAt;
   final List<GroupMember> members;
+  final List<String> memberIds;
   final String? photoUrl;
+  final String? lastMessage;
+  final DateTime? lastMessageTime;
 
   GroupModel({
     required this.id,
@@ -50,33 +55,27 @@ class GroupModel {
     required this.createdBy,
     required this.createdAt,
     required this.members,
+    required this.memberIds,
     this.photoUrl,
+    this.lastMessage,
+    this.lastMessageTime,
   });
 
   factory GroupModel.fromFirestore(DocumentSnapshot doc) {
     Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-    List<GroupMember> membersList = [];
-    
-    if (data['members'] != null) {
-      try {
-        membersList = (data['members'] as List)
-            .map((member) => GroupMember.fromMap(member as Map<String, dynamic>))
-            .toList();
-      } catch (e) {
-        print('Error parsing members: $e');
-        membersList = [];
-      }
-    }
-
     return GroupModel(
       id: doc.id,
       name: data['name'] ?? 'Unnamed Group',
       createdBy: data['createdBy'] ?? '',
-      createdAt: data['createdAt'] != null 
-          ? (data['createdAt'] as Timestamp).toDate()
-          : DateTime.now(),
-      members: membersList,
+      createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      members: (data['members'] as List<dynamic>?)
+              ?.map((memberData) => GroupMember.fromMap(memberData as Map<String, dynamic>))
+              .toList() ??
+          [],
+      memberIds: List<String>.from(data['memberIds'] ?? []),
       photoUrl: data['photoUrl'],
+      lastMessage: data['lastMessage'],
+      lastMessageTime: (data['lastMessageTime'] as Timestamp?)?.toDate(),
     );
   }
 
@@ -84,24 +83,68 @@ class GroupModel {
     return {
       'name': name,
       'createdBy': createdBy,
-      'createdAt': Timestamp.fromDate(createdAt),
+      'createdAt': createdAt.toIso8601String(),
       'members': members.map((member) => member.toMap()).toList(),
+      'memberIds': memberIds,
       if (photoUrl != null) 'photoUrl': photoUrl,
+      'lastMessage': lastMessage,
+      'lastMessageTime': lastMessageTime != null ? Timestamp.fromDate(lastMessageTime!) : null,
     };
   }
 
   GroupModel copyWith({
+    String? id,
     String? name,
+    String? createdBy,
+    DateTime? createdAt,
     List<GroupMember>? members,
+    List<String>? memberIds,
     String? photoUrl,
+    String? lastMessage,
+    DateTime? lastMessageTime,
   }) {
     return GroupModel(
-      id: this.id,
+      id: id ?? this.id,
       name: name ?? this.name,
-      createdBy: this.createdBy,
-      createdAt: this.createdAt,
+      createdBy: createdBy ?? this.createdBy,
+      createdAt: createdAt ?? this.createdAt,
       members: members ?? this.members,
+      memberIds: memberIds ?? this.memberIds,
       photoUrl: photoUrl ?? this.photoUrl,
+      lastMessage: lastMessage ?? this.lastMessage,
+      lastMessageTime: lastMessageTime ?? this.lastMessageTime,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'createdBy': createdBy,
+      'createdAt': createdAt.toIso8601String(),
+      'members': members.map((m) => m.toMap()).toList(),
+      'memberIds': memberIds,
+      'photoUrl': photoUrl,
+      'lastMessage': lastMessage,
+      'lastMessageTime': lastMessageTime?.toIso8601String(),
+    };
+  }
+
+  factory GroupModel.fromJson(Map<String, dynamic> json) {
+    return GroupModel(
+      id: json['id'],
+      name: json['name'],
+      createdBy: json['createdBy'],
+      createdAt: DateTime.parse(json['createdAt']),
+      members: (json['members'] as List)
+          .map((m) => GroupMember.fromMap(m))
+          .toList(),
+      memberIds: List<String>.from(json['memberIds'] ?? []),
+      photoUrl: json['photoUrl'],
+      lastMessage: json['lastMessage'],
+      lastMessageTime: json['lastMessageTime'] != null
+          ? DateTime.parse(json['lastMessageTime'])
+          : null,
     );
   }
 } 

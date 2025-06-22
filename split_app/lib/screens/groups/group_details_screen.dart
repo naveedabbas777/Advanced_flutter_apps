@@ -8,18 +8,15 @@ import '../../providers/group_provider.dart';
 import 'package:split_app/models/group_model.dart';
 import 'package:split_app/screens/expenses/add_expense_screen.dart';
 import 'package:split_app/screens/members/add_member_screen.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:firebase_storage/firebase_storage.dart';
-import 'dart:io';
 import 'group_chat_screen.dart';
 import 'package:badges/badges.dart' as badges;
 import 'package:csv/csv.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:open_file/open_file.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'dart:io';
 
 // Re-applying to refresh parsing due to persistent 'Expected an identifier' error.
 class GroupDetailsScreen extends StatefulWidget {
@@ -35,32 +32,6 @@ class GroupDetailsScreen extends StatefulWidget {
 }
 
 class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
-  File? _selectedImage;
-  bool _isUploading = false;
-
-  Future<void> _pickAndUploadImage(String groupId) async {
-    final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(source: ImageSource.gallery, imageQuality: 75);
-    if (pickedFile != null) {
-      setState(() { _isUploading = true; });
-      final imageFile = File(pickedFile.path);
-      try {
-        final fileName = 'group_avatars/${DateTime.now().millisecondsSinceEpoch}_${imageFile.path.split('/').last}';
-        final ref = FirebaseStorage.instance.ref().child(fileName);
-        final uploadTask = await ref.putFile(imageFile);
-        final photoUrl = await uploadTask.ref.getDownloadURL();
-        await FirebaseFirestore.instance.collection('groups').doc(groupId).update({'photoUrl': photoUrl});
-        setState(() { _selectedImage = imageFile; });
-      } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to upload photo: $e')),
-        );
-      } finally {
-        setState(() { _isUploading = false; });
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AppAuthProvider>(context);
@@ -90,7 +61,22 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
         if (!snapshot.hasData || !snapshot.data!.exists) {
           return Scaffold(
             appBar: AppBar(title: const Text('Group Not Found')),
-            body: const Center(child: Text('Group not found.')),
+            body: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.group_off, size: 60, color: Colors.grey),
+                  SizedBox(height: 16),
+                  Text('Group not found.', style: TextStyle(fontSize: 20, color: Colors.grey)),
+                  SizedBox(height: 16),
+                  ElevatedButton.icon(
+                    icon: Icon(Icons.home),
+                    label: Text('Back to Home'),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+            ),
           );
         }
         final group = GroupModel.fromFirestore(snapshot.data!);
@@ -101,6 +87,17 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
           appBar: AppBar(
             title: Text(groupName),
             actions: [
+              IconButton(
+                icon: Icon(Icons.person_add_alt_1),
+                tooltip: 'Invite Member',
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => AddMemberScreen(groupId: group.id),
+                    ),
+                  );
+                },
+              ),
               StreamBuilder<DocumentSnapshot>(
                 stream: FirebaseFirestore.instance
                     .collection('groups')
@@ -183,17 +180,11 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                         bottom: 0,
                         right: 0,
                         child: GestureDetector(
-                          onTap: _isUploading ? null : () => _pickAndUploadImage(widget.groupId),
+                          onTap: null,
                           child: CircleAvatar(
                             radius: 18,
                             backgroundColor: Theme.of(context).colorScheme.primary,
-                            child: _isUploading
-                                ? const SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                                  )
-                                : const Icon(Icons.camera_alt, color: Colors.white, size: 20),
+                            child: const Icon(Icons.camera_alt, color: Colors.white, size: 20),
                           ),
                         ),
                       ),
@@ -283,7 +274,12 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                                   label: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      Text(member.username),
+                                      Flexible(
+                                        child: Text(
+                                          member.username,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
                                       if (member.isAdmin) ...[
                                         const SizedBox(width: 4),
                                         Text(
@@ -410,7 +406,13 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                                   child: Row(
                                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                     children: [
-                                      Text(member.username, style: Theme.of(context).textTheme.bodyMedium),
+                                      Flexible(
+                                        child: Text(
+                                          member.username,
+                                          style: Theme.of(context).textTheme.bodyMedium,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
                                       Text(balanceText, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: balanceColor, fontWeight: FontWeight.bold)),
                                     ],
                                   ),
@@ -694,7 +696,12 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                                                   child: Row(
                                                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                                     children: [
-                                                      Text(memberName),
+                                                      Flexible(
+                                                        child: Text(
+                                                          memberName,
+                                                          overflow: TextOverflow.ellipsis,
+                                                        ),
+                                                      ),
                                                       Text('\$${(entry.value as double).toStringAsFixed(2)}'),
                                                     ],
                                                   ),
@@ -954,7 +961,9 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                       final dir = await getTemporaryDirectory();
                       final file = File('${dir.path}/${group.name}_expenses.csv');
                       await file.writeAsString(csvData);
-                      await OpenFile.open(file.path);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Expenses exported to ${file.path}')),
+                      );
                     } else if (format == 'pdf') {
                       final pdf = pw.Document();
                       pdf.addPage(
@@ -969,7 +978,9 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                       final dir = await getTemporaryDirectory();
                       final file = File('${dir.path}/${group.name}_expenses.pdf');
                       await file.writeAsBytes(await pdf.save());
-                      await OpenFile.open(file.path);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Expenses exported to ${file.path}')),
+                      );
                     }
                   } catch (e) {
                     ScaffoldMessenger.of(context).showSnackBar(

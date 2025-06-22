@@ -34,85 +34,6 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         .set({'lastSeen': FieldValue.serverTimestamp()}, SetOptions(merge: true));
   }
 
-  Future<void> _sendMessage() async {
-    final text = _messageController.text.trim();
-    if (text.isEmpty) return;
-    setState(() => _isSending = true);
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-    final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-    final username = userDoc.data()?['username'] ?? user.email ?? 'Unknown';
-    await FirebaseFirestore.instance
-        .collection('groups')
-        .doc(widget.groupId)
-        .collection('messages')
-        .add({
-      'text': text,
-      'senderId': user.uid,
-      'senderName': username,
-      'timestamp': FieldValue.serverTimestamp(),
-    });
-    _messageController.clear();
-    setState(() => _isSending = false);
-    // Send notification to group members
-    await _sendChatNotificationToGroup(text, username, user.uid);
-  }
-
-  Future<void> _sendChatNotificationToGroup(String message, String senderName, String senderId) async {
-    // Fetch group members
-    final groupDoc = await FirebaseFirestore.instance.collection('groups').doc(widget.groupId).get();
-    final members = groupDoc.data()?['members'] as List<dynamic>?;
-    if (members == null) return;
-    List<String> userIds = [];
-    for (var m in members) {
-      if (m is Map && m['userId'] != null && m['userId'] != senderId) {
-        userIds.add(m['userId']);
-      }
-    }
-    // Fetch FCM tokens
-    final usersSnapshot = await FirebaseFirestore.instance.collection('users').where(FieldPath.documentId, whereIn: userIds).get();
-    List<String> tokens = [];
-    for (var doc in usersSnapshot.docs) {
-      final token = doc.data()['fcmToken'];
-      if (token != null && token is String) tokens.add(token);
-    }
-    // Send notification to each token
-    for (final token in tokens) {
-      await _sendFcmNotification(
-        token,
-        title: '${widget.groupName} - New Message',
-        body: '$senderName: $message',
-      );
-    }
-  }
-
-  Future<void> _sendFcmNotification(String token, {required String title, required String body}) async {
-    const String serverKey = 'YOUR_SERVER_KEY_HERE'; // <-- Replace with your FCM server key
-    final url = Uri.parse('https://fcm.googleapis.com/fcm/send');
-    final headers = {
-      'Content-Type': 'application/json',
-      'Authorization': 'key=$serverKey',
-    };
-    final payload = {
-      'to': token,
-      'notification': {
-        'title': title,
-        'body': body,
-      },
-      'data': {
-        'click_action': 'FLUTTER_NOTIFICATION_CLICK',
-      },
-    };
-    try {
-      final response = await http.post(url, headers: headers, body: jsonEncode(payload));
-      if (response.statusCode != 200) {
-        print('FCM send error: ${response.body}');
-      }
-    } catch (e) {
-      print('FCM send exception: $e');
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -124,14 +45,13 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
-                  .collection('groups')
-                  .doc(widget.groupId)
-                  .collection('messages')
+                  .collection('group_messages')
+                  .where('groupId', isEqualTo: widget.groupId)
                   .orderBy('timestamp', descending: false)
                   .snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
-                  return Center(child: Text('Error: ${snapshot.error}'));
+                  return Center(child: Text('Error: \\${snapshot.error}'));
                 }
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
@@ -210,5 +130,33 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _sendMessage() async {
+    final text = _messageController.text.trim();
+    if (text.isEmpty) return;
+    setState(() => _isSending = true);
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+    final username = userDoc.data()?['username'] ?? user.email ?? 'Unknown';
+    await FirebaseFirestore.instance
+        .collection('group_messages')
+        .add({
+      'groupId': widget.groupId,
+      'text': text,
+      'senderId': user.uid,
+      'senderName': username,
+      'timestamp': FieldValue.serverTimestamp(),
+    });
+
+    // Update the group with the last message info
+    await FirebaseFirestore.instance.collection('groups').doc(widget.groupId).update({
+      'lastMessage': text,
+      'lastMessageTime': FieldValue.serverTimestamp(),
+    });
+
+    _messageController.clear();
+    setState(() => _isSending = false);
   }
 } 

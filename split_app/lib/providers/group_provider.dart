@@ -4,6 +4,8 @@ import '../models/group_model.dart';
 import '../models/user_model.dart';
 import 'package:rxdart/rxdart.dart';
 import 'dart:async';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 
 class GroupProvider extends ChangeNotifier {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -29,9 +31,13 @@ class GroupProvider extends ChangeNotifier {
         .collection('groups')
         .where('memberIds', arrayContains: userId)
         .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => GroupModel.fromFirestore(doc))
-            .toList());
+        .map((snapshot) {
+          final groups = snapshot.docs
+              .map((doc) => GroupModel.fromFirestore(doc))
+              .toList();
+          saveGroupsToPrefs(groups); // cache after fetch
+          return groups;
+        });
   }
 
   Future<void> createGroup(String name, UserModel creator, {String? photoUrl}) async {
@@ -428,5 +434,57 @@ class GroupProvider extends ChangeNotifier {
 
   bool isUserAdmin(String userId, List<GroupMember> members) {
     return members.any((member) => member.userId == userId && member.isAdmin);
+  }
+
+  Future<List<GroupModel>> fetchUserGroupsPage(String userId, {DocumentSnapshot? startAfter, int limit = 10}) async {
+    Query query = _firestore
+        .collection('groups')
+        .where('memberIds', arrayContains: userId)
+        .orderBy('createdAt', descending: true)
+        .limit(limit);
+
+    if (startAfter != null) {
+      query = query.startAfterDocument(startAfter);
+    }
+
+    final snapshot = await query.get();
+    return snapshot.docs.map((doc) => GroupModel.fromFirestore(doc)).toList();
+  }
+
+  // Returns a stream of all groups (for admin or discovery purposes)
+  Stream<List<GroupModel>> getAllGroupsStream() {
+    return _firestore
+        .collection('groups')
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+            .map((doc) => GroupModel.fromFirestore(doc))
+            .toList());
+  }
+
+  // Save groups to shared preferences
+  Future<void> saveGroupsToPrefs(List<GroupModel> groups) async {
+    final prefs = await SharedPreferences.getInstance();
+    final groupsJson = jsonEncode(groups.map((g) => g.toJson()).toList());
+    await prefs.setString('userGroups', groupsJson);
+  }
+
+  // Load groups from shared preferences
+  Future<List<GroupModel>> loadGroupsFromPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    final groupsJson = prefs.getString('userGroups');
+    if (groupsJson == null) return [];
+    final List decoded = jsonDecode(groupsJson);
+    return decoded.map((g) => GroupModel.fromJson(g)).toList();
+  }
+
+  // One-time fetch for user groups (for FutureBuilder)
+  Future<List<GroupModel>> getUserGroupsOnce(String userId) async {
+    final snapshot = await _firestore
+        .collection('groups')
+        .where('memberIds', arrayContains: userId)
+        .get();
+    final groups = snapshot.docs.map((doc) => GroupModel.fromFirestore(doc)).toList();
+    await saveGroupsToPrefs(groups); // cache after fetch
+    return groups;
   }
 } 

@@ -2,9 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:async';
-import 'package:image_picker/image_picker.dart';
-import 'package:firebase_storage/firebase_storage.dart';
-import 'dart:io';
 
 class DirectChatScreen extends StatefulWidget {
   final String chatId;
@@ -52,53 +49,6 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
     super.dispose();
   }
 
-  Future<void> _sendMessage() async {
-    final text = _messageController.text.trim();
-    if (text.isEmpty) return;
-    setState(() => _isSending = true);
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-    final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-    final username = userDoc.data()?['username'] ?? user.email ?? 'Unknown';
-    await FirebaseFirestore.instance
-        .collection('direct_chats')
-        .doc(widget.chatId)
-        .collection('messages')
-        .add({
-      'text': text,
-      'senderId': user.uid,
-      'senderName': username,
-      'timestamp': FieldValue.serverTimestamp(),
-    });
-    _messageController.clear();
-    setState(() => _isSending = false);
-  }
-
-  Future<void> _sendImage() async {
-    final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(source: ImageSource.gallery, imageQuality: 75);
-    if (pickedFile == null) return;
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-    final file = File(pickedFile.path);
-    final fileName = 'direct_chat_images/${widget.chatId}_${DateTime.now().millisecondsSinceEpoch}_${file.path.split('/').last}';
-    final ref = FirebaseStorage.instance.ref().child(fileName);
-    final uploadTask = await ref.putFile(file);
-    final imageUrl = await uploadTask.ref.getDownloadURL();
-    final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-    final username = userDoc.data()?['username'] ?? user.email ?? 'Unknown';
-    await FirebaseFirestore.instance
-        .collection('direct_chats')
-        .doc(widget.chatId)
-        .collection('messages')
-        .add({
-      'imageUrl': imageUrl,
-      'senderId': user.uid,
-      'senderName': username,
-      'timestamp': FieldValue.serverTimestamp(),
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     final myUserId = FirebaseAuth.instance.currentUser?.uid;
@@ -111,14 +61,13 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
-                  .collection('direct_chats')
-                  .doc(widget.chatId)
-                  .collection('messages')
+                  .collection('direct_messages')
+                  .where('chatId', isEqualTo: widget.chatId)
                   .orderBy('timestamp', descending: false)
                   .snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
-                  return Center(child: Text('Error: ${snapshot.error}'));
+                  return Center(child: Text('Error: \\${snapshot.error}'));
                 }
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
@@ -220,11 +169,14 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
                 IconButton(
                   icon: Icon(Icons.attach_file),
                   tooltip: 'Send Image',
-                  onPressed: _sendImage,
+                  onPressed: () {
+                    // Placeholder for the removed _sendImage method
+                  },
                 ),
                 Expanded(
                   child: TextField(
                     controller: _messageController,
+                    onChanged: _onTextChanged,
                     decoration: const InputDecoration(
                       hintText: 'Type a message...',
                       border: OutlineInputBorder(),
@@ -232,7 +184,6 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
                     ),
                     minLines: 1,
                     maxLines: 4,
-                    onChanged: _onTextChanged,
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -249,5 +200,26 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _sendMessage() async {
+    final text = _messageController.text.trim();
+    if (text.isEmpty) return;
+    setState(() => _isSending = true);
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+    final username = userDoc.data()?['username'] ?? user.email ?? 'Unknown';
+    await FirebaseFirestore.instance
+        .collection('direct_messages')
+        .add({
+      'chatId': widget.chatId,
+      'text': text,
+      'senderId': user.uid,
+      'senderName': username,
+      'timestamp': FieldValue.serverTimestamp(),
+    });
+    _messageController.clear();
+    setState(() => _isSending = false);
   }
 } 

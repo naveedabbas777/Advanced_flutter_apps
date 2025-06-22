@@ -15,12 +15,10 @@ class AddMemberScreen extends StatefulWidget {
 
 class _AddMemberScreenState extends State<AddMemberScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController();
   bool _isLoading = false;
 
   @override
   void dispose() {
-    _emailController.dispose();
     super.dispose();
   }
 
@@ -43,7 +41,7 @@ class _AddMemberScreenState extends State<AddMemberScreen> {
           groupId: widget.groupId,
           invitedBy: authProvider.currentUserModel!.uid,
           invitedByUsername: authProvider.currentUserModel!.username,
-          invitedUserEmail: _emailController.text.trim(),
+          invitedUserEmail: '',
         );
 
         if (groupProvider.error != null) {
@@ -84,7 +82,6 @@ class _AddMemberScreenState extends State<AddMemberScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               TextFormField(
-                controller: _emailController,
                 decoration: InputDecoration(
                   labelText: 'Member Email',
                   hintText: 'Enter email of member to invite',

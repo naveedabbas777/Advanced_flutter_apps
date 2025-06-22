@@ -14,8 +14,8 @@ class AddMemberScreen extends StatefulWidget {
 
 class _AddMemberScreenState extends State<AddMemberScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController();
   bool _isLoading = false;
+  final _emailController = TextEditingController();
 
   @override
   void dispose() {
@@ -59,13 +59,17 @@ class _AddMemberScreenState extends State<AddMemberScreen> {
           groupId: widget.groupId,
           invitedBy: authProvider.currentUserModel!.uid,
           invitedByUsername: authProvider.currentUserModel!.username,
-          invitedUserEmail: _emailController.text.trim(),
+          invitedUserEmail: _emailController.text.trim().toLowerCase(),
         );
 
         if (groupProvider.error != null) {
+          String errorMsg = groupProvider.error!;
+          if (errorMsg.contains('User not found')) {
+            errorMsg = 'No user found with this email. Please make sure your friend has registered and you entered the correct email.';
+          }
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(groupProvider.error!),
+              content: Text(errorMsg),
               backgroundColor: Colors.red,
             ),
           );

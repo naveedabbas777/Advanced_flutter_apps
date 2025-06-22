@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'dart:io'; // Import for SocketException
-import 'package:firebase_messaging/firebase_messaging.dart'; // Import Firebase Messaging
+// import 'package:firebase_messaging/firebase_messaging.dart'; // Import Firebase Messaging
 import '../models/user_model.dart';
 import 'dart:async'; // Import for StreamSubscription
 import '../services/auth_service.dart';
@@ -82,7 +81,6 @@ class AppAuthProvider extends ChangeNotifier {
       notifyListeners();
 
       await _authService.registerWithEmailAndPassword(email, password, username);
-      await _saveFcmToken();
       await _updateLastActive();
       _isLoading = false;
       notifyListeners();
@@ -100,7 +98,6 @@ class AppAuthProvider extends ChangeNotifier {
       notifyListeners();
 
       await _authService.signInWithEmailAndPassword(email, password);
-      await _saveFcmToken();
       await _updateLastActive();
       bool isVerified = await _authService.checkEmailVerification();
       if (!isVerified) {
@@ -419,15 +416,6 @@ class AppAuthProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> _saveFcmToken() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-    final fcmToken = await FirebaseMessaging.instance.getToken();
-    if (fcmToken != null) {
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).update({'fcmToken': fcmToken});
-    }
-  }
-
   Future<void> loadPinned() async {
     if (_user == null) return;
     final doc = await FirebaseFirestore.instance.collection('users').doc(_user!.uid).get();
@@ -512,5 +500,25 @@ class AppAuthProvider extends ChangeNotifier {
     }
     await FirebaseFirestore.instance.collection('users').doc(_user!.uid).update({'archivedChats': _archivedChats});
     notifyListeners();
+  }
+
+  Stream<UserModel?> get userStream {
+    return _authService.authStateChanges.asyncMap((user) => user != null ? getUserModel(user.uid) : null);
+  }
+
+  Future<UserModel?> getUserModel(String uid) async {
+    try {
+      final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      if (doc.exists) {
+        return UserModel.fromFirestore(doc);
+      }
+    } catch (e) {
+      print('Error getting user model: $e');
+    }
+    return null;
+  }
+
+  Future<void> signUp(String email, String password, String username) async {
+    // ... existing code ...
   }
 } 

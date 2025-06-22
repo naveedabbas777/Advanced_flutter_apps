@@ -57,17 +57,7 @@ class _LoginScreenState extends State<LoginScreen> {
         if (!isEmailVerified) {
           print('Email not verified, showing verification dialog...');
           if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Please verify your email before logging in.'),
-              backgroundColor: Colors.orange,
-              duration: Duration(seconds: 5),
-            ),
-          );
-
-          // Show dialog to resend verification email
-          if (!mounted) return;
-          showDialog(
+          await showDialog(
             context: context,
             barrierDismissible: false,
             builder: (context) => AlertDialog(
@@ -109,6 +99,8 @@ class _LoginScreenState extends State<LoginScreen> {
               ],
             ),
           );
+          // Do not navigate to home if not verified
+          return;
         } else {
           print('Email verified, navigating to home screen');
           if (!mounted) return;

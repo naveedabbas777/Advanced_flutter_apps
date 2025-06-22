@@ -2,9 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../services/expense_service.dart';
 import '../../services/group_service.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:firebase_storage/firebase_storage.dart';
-import 'dart:io';
 
 class AddExpenseScreen extends StatefulWidget {
   final String groupId;
@@ -25,8 +22,6 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   bool _isLoading = false;
   final ExpenseService _expenseService = ExpenseService();
   final GroupService _groupService = GroupService();
-  File? _selectedImage;
-  String? _uploadedImageUrl;
   final List<String> _categories = ['Food', 'Travel', 'Utilities', 'Shopping', 'Other'];
   String? _selectedCategory;
 
@@ -80,27 +75,12 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     if (_formKey.currentState!.validate() && _selectedPaidBy != null) {
       setState(() => _isLoading = true);
       try {
-        String? imageUrl;
-        if (_selectedImage != null) {
-          imageUrl = await _uploadImage(_selectedImage!);
-          if (imageUrl == null) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Failed to upload expense attachment.'),
-                backgroundColor: Colors.red,
-              ),
-            );
-            setState(() => _isLoading = false);
-            return;
-          }
-        }
         await _expenseService.addExpense(
           groupId: widget.groupId,
           title: _titleController.text.trim(),
           amount: double.parse(_amountController.text.trim()),
           paidBy: _selectedPaidBy!,
           notes: _notesController.text.trim(),
-          imageUrl: imageUrl,
           category: _selectedCategory,
         );
         Navigator.pop(context);
@@ -114,30 +94,29 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     }
   }
 
-  Future<void> _pickImage() async {
-    final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(source: ImageSource.gallery, imageQuality: 75);
-    if (pickedFile != null) {
-      setState(() {
-        _selectedImage = File(pickedFile.path);
-      });
-    }
-  }
-
-  Future<String?> _uploadImage(File imageFile) async {
-    try {
-      final fileName = 'expense_attachments/${DateTime.now().millisecondsSinceEpoch}_${imageFile.path.split('/').last}';
-      final ref = FirebaseStorage.instance.ref().child(fileName);
-      final uploadTask = await ref.putFile(imageFile);
-      return await uploadTask.ref.getDownloadURL();
-    } catch (e) {
-      print('Image upload error: $e');
-      return null;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
+    if (_members.isEmpty) {
+      return Scaffold(
+        appBar: AppBar(title: Text('Add Expense')),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.group_off, size: 60, color: Colors.grey),
+              SizedBox(height: 16),
+              Text('No group members found.', style: TextStyle(fontSize: 20, color: Colors.grey)),
+              SizedBox(height: 16),
+              ElevatedButton.icon(
+                icon: Icon(Icons.arrow_back),
+                label: Text('Back'),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     return Scaffold(
       appBar: AppBar(
         title: Text('Add Expense'),
@@ -220,38 +199,6 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                   border: OutlineInputBorder(),
                 ),
                 maxLines: 3,
-              ),
-              SizedBox(height: 24),
-              Row(
-                children: [
-                  IconButton(
-                    icon: Icon(Icons.attach_file),
-                    tooltip: 'Attach Receipt',
-                    onPressed: _isLoading ? null : _pickImage,
-                  ),
-                  if (_selectedImage != null)
-                    GestureDetector(
-                      onTap: () {
-                        showDialog(
-                          context: context,
-                          builder: (_) => Dialog(
-                            child: InteractiveViewer(
-                              child: Image.file(_selectedImage!),
-                            ),
-                          ),
-                        );
-                      },
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image.file(
-                          _selectedImage!,
-                          width: 60,
-                          height: 60,
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                    ),
-                ],
               ),
               SizedBox(height: 24),
               DropdownButtonFormField<String>(

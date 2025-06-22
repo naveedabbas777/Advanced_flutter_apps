@@ -26,13 +26,31 @@ class InvitationsScreen extends StatelessWidget {
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
-            return Center(child: Text('Error: ${snapshot.error}'));
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.error, color: Colors.red, size: 40),
+                  SizedBox(height: 8),
+                  Text(
+                    'Error loading invitations:\n${snapshot.error}',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.red),
+                  ),
+                  SizedBox(height: 8),
+                  ElevatedButton(
+                    onPressed: () {
+                      // Optionally, trigger a reload
+                    },
+                    child: Text('Retry'),
+                  ),
+                ],
+              ),
+            );
           }
-
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
-
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
             return Center(
               child: Column(
@@ -49,6 +67,12 @@ class InvitationsScreen extends StatelessWidget {
                     'You currently have no new group invitations.',
                     style: Theme.of(context).textTheme.bodyMedium,
                     textAlign: TextAlign.center,
+                  ),
+                  SizedBox(height: 16),
+                  ElevatedButton.icon(
+                    icon: Icon(Icons.home),
+                    label: Text('Back to Home'),
+                    onPressed: () => Navigator.of(context).pop(),
                   ),
                 ],
               ),

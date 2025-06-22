@@ -2,9 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:split_app/providers/auth_provider.dart';
 import 'package:split_app/providers/group_provider.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:firebase_storage/firebase_storage.dart';
-import 'dart:io';
 
 class CreateGroupScreen extends StatefulWidget {
   @override
@@ -15,35 +12,11 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
   final _formKey = GlobalKey<FormState>();
   final _groupNameController = TextEditingController();
   bool _isCreating = false;
-  File? _selectedImage;
-  String? _uploadedImageUrl;
 
   @override
   void dispose() {
     _groupNameController.dispose();
     super.dispose();
-  }
-
-  Future<void> _pickImage() async {
-    final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(source: ImageSource.gallery, imageQuality: 75);
-    if (pickedFile != null) {
-      setState(() {
-        _selectedImage = File(pickedFile.path);
-      });
-    }
-  }
-
-  Future<String?> _uploadImage(File imageFile) async {
-    try {
-      final fileName = 'group_avatars/${DateTime.now().millisecondsSinceEpoch}_${imageFile.path.split('/').last}';
-      final ref = FirebaseStorage.instance.ref().child(fileName);
-      final uploadTask = await ref.putFile(imageFile);
-      return await uploadTask.ref.getDownloadURL();
-    } catch (e) {
-      print('Image upload error: $e');
-      return null;
-    }
   }
 
   String? _validateGroupName(String? value) {
@@ -77,25 +50,10 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
         setState(() => _isCreating = false);
         return;
       }
-      String? photoUrl;
-      if (_selectedImage != null) {
-        photoUrl = await _uploadImage(_selectedImage!);
-        if (photoUrl == null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Failed to upload group photo.'),
-              backgroundColor: Colors.red,
-            ),
-          );
-          setState(() => _isCreating = false);
-          return;
-        }
-      }
       try {
         await groupProvider.createGroup(
           _groupNameController.text.trim(),
           authProvider.currentUserModel!,
-          photoUrl: photoUrl,
         );
         if (groupProvider.error != null) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -153,21 +111,6 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                         Text(
                           'Group Details',
                           style: theme.textTheme.titleLarge,
-                        ),
-                        const SizedBox(height: 16),
-                        Center(
-                          child: GestureDetector(
-                            onTap: _isCreating ? null : _pickImage,
-                            child: CircleAvatar(
-                              radius: 40,
-                              backgroundImage: _selectedImage != null
-                                  ? FileImage(_selectedImage!)
-                                  : null,
-                              child: _selectedImage == null
-                                  ? const Icon(Icons.camera_alt, size: 40)
-                                  : null,
-                            ),
-                          ),
                         ),
                         const SizedBox(height: 16),
                         TextFormField(
