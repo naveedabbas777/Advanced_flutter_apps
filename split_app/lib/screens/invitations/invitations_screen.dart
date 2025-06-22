@@ -88,7 +88,8 @@ class InvitationsScreen extends StatelessWidget {
               String invitationId = invitation.id;
               String groupId = invitationData['groupId'] ?? '';
               String groupName = invitationData['groupName'] ?? 'Unnamed Group';
-              String invitedByUserId = invitationData['invitedByUserId'] ?? '';
+              String invitedByUsername = invitationData['invitedByUsername'] ?? '';
+              String invitedByEmail = invitationData['invitedByEmail'] ?? '';
 
               return Card(
                 margin: const EdgeInsets.symmetric(vertical: 8.0),
@@ -98,7 +99,7 @@ class InvitationsScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Invitation to Join: ', // Add an explicit title
+                        'Invitation to Join: ',
                         style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.normal),
                       ),
                       Text(
@@ -106,23 +107,14 @@ class InvitationsScreen extends StatelessWidget {
                         style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 8),
-                      if (invitedByUserId.isNotEmpty)
-                        FutureBuilder<DocumentSnapshot>(
-                          future: FirebaseFirestore.instance.collection('users').doc(invitedByUserId).get(),
-                          builder: (context, userSnapshot) {
-                            String invitedByName = 'Unknown';
-                            if (userSnapshot.hasData && userSnapshot.data!.exists) {
-                              invitedByName = userSnapshot.data!['username'] ?? userSnapshot.data!['email'] ?? 'Unknown';
-                            }
-                            return Text(
-                              'Invited by: $invitedByName',
-                              style: Theme.of(context).textTheme.bodyMedium,
-                            );
-                          },
+                      if (invitedByUsername.isNotEmpty)
+                        Text(
+                          'Invited by: $invitedByUsername${invitedByEmail.isNotEmpty ? ' ($invitedByEmail)' : ''}',
+                          style: Theme.of(context).textTheme.bodyMedium,
                         )
                       else
                         Text(
-                          'Invited by: Unknown User', // Fallback for empty invitedByUserId
+                          'Invited by: Unknown User',
                           style: Theme.of(context).textTheme.bodyMedium,
                         ),
                       const SizedBox(height: 16),

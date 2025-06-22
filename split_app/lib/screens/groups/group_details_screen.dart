@@ -18,6 +18,9 @@ import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'dart:io';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:split_app/screens/groups/group_summary_screen.dart';
+import 'package:split_app/screens/groups/user_invite_search_screen.dart';
 
 // Re-applying to refresh parsing due to persistent 'Expected an identifier' error.
 class GroupDetailsScreen extends StatefulWidget {
@@ -90,12 +93,31 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
             title: Text(groupName),
             actions: [
               IconButton(
+                icon: Icon(Icons.bar_chart),
+                tooltip: 'Group Summary',
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => GroupSummaryScreen(
+                        groupId: group.id,
+                        members: group.members,
+                        groupName: group.name,
+                      ),
+                    ),
+                  );
+                },
+              ),
+              IconButton(
                 icon: Icon(Icons.person_add_alt_1),
                 tooltip: 'Invite Member',
                 onPressed: () {
                   Navigator.of(context).push(
                     MaterialPageRoute(
-                      builder: (_) => AddMemberScreen(groupId: group.id),
+                      builder: (_) => UserInviteSearchScreen(
+                        groupId: group.id,
+                        currentMemberIds: group.members.map((m) => m.userId).toList(),
+                        currentUserId: userId,
+                      ),
                     ),
                   );
                 },
@@ -328,214 +350,88 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                     ),
                   ),
                 ),
-                // Group Dashboard Summary
+                // Group Summary Table (no graph)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      'Group Summary',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                  ),
-                ),
-                StreamBuilder<QuerySnapshot>(
-                  stream: FirebaseFirestore.instance
-                      .collection('groups')
-                      .doc(widget.groupId)
-                      .collection('expenses')
-                      .snapshots(),
-                  builder: (context, snapshot) {
-                    if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                      return const SizedBox.shrink();
-                    }
-                    final expenses = snapshot.data!.docs;
-                    final members = group.members;
-                    // Calculate paid and owed per user
-                    final Map<String, double> paidMap = {for (var m in members) m.userId: 0.0};
-                    final Map<String, double> owedMap = {for (var m in members) m.userId: 0.0};
-                    for (var doc in expenses) {
-                      final data = doc.data() as Map<String, dynamic>;
-                      final amount = (data['amount'] as num?)?.toDouble() ?? 0.0;
-                      final paidBy = data['paidBy'] as String?;
-                      final splitType = data['splitType'] ?? 'equal';
-                      if (paidBy != null && paidMap.containsKey(paidBy)) {
-                        paidMap[paidBy] = paidMap[paidBy]! + amount;
+                  child: StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collection('groups')
+                        .doc(widget.groupId)
+                        .collection('expenses')
+                        .snapshots(),
+                    builder: (context, snapshot) {
+                      if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                        return const Center(child: Text('No expenses yet.'));
                       }
-                      if (splitType == 'custom' && data['splitData'] is Map) {
-                        final splitData = data['splitData'] as Map<String, dynamic>;
-                        splitData.forEach((uid, share) {
-                          if (owedMap.containsKey(uid)) {
-                            owedMap[uid] = owedMap[uid]! + (share is num ? share.toDouble() : 0.0);
+                      final expenses = snapshot.data!.docs;
+                      final sortedMembers = [...groupMembers]..sort((a, b) => a.username.compareTo(b.username));
+                      final Map<String, double> paidMap = {for (var m in sortedMembers) m.userId: 0.0};
+                      final Map<String, double> owedMap = {for (var m in sortedMembers) m.userId: 0.0};
+
+                      for (var doc in expenses) {
+                        final data = doc.data() as Map<String, dynamic>;
+                        final amount = (data['amount'] as num?)?.toDouble() ?? 0.0;
+                        final paidBy = data['paidBy'] as String?;
+                        final splitType = data['splitType'] ?? 'equal';
+
+                        // Add to Paid
+                        if (paidBy != null && paidMap.containsKey(paidBy)) {
+                          paidMap[paidBy] = paidMap[paidBy]! + amount;
+                        }
+
+                        // Calculate Owes
+                        if (splitType == 'custom' && data['splitData'] is Map) {
+                          final splitData = data['splitData'] as Map<String, dynamic>;
+                          splitData.forEach((uid, share) {
+                            if (owedMap.containsKey(uid)) {
+                              owedMap[uid] = owedMap[uid]! + (share is num ? share.toDouble() : 0.0);
+                            }
+                          });
+                        } else if (splitType == 'equal' && data['splitAmong'] is List) {
+                          final splitAmong = List<String>.from(data['splitAmong'] ?? []);
+                          final perUser = splitAmong.isNotEmpty ? amount / splitAmong.length : 0.0;
+                          for (var uid in splitAmong) {
+                            if (owedMap.containsKey(uid)) {
+                              owedMap[uid] = owedMap[uid]! + perUser;
+                            }
                           }
-                        });
-                      } else {
-                        // Equal split
-                        final perUser = members.isNotEmpty ? amount / members.length : 0.0;
-                        for (var m in members) {
-                          owedMap[m.userId] = owedMap[m.userId]! + perUser;
+                        } else {
+                          // Fallback: split among all members
+                          final perUser = sortedMembers.isNotEmpty ? amount / sortedMembers.length : 0.0;
+                          for (var m in sortedMembers) {
+                            owedMap[m.userId] = owedMap[m.userId]! + perUser;
+                          }
                         }
                       }
-                    }
-                    final barGroups = <BarChartGroupData>[];
-                    final barColors = [Colors.green, Colors.red];
-                    for (int i = 0; i < members.length; i++) {
-                      final m = members[i];
-                      barGroups.add(
-                        BarChartGroupData(
-                          x: i,
-                          barRods: [
-                            BarChartRodData(toY: paidMap[m.userId] ?? 0, color: barColors[0], width: 8),
-                            BarChartRodData(toY: owedMap[m.userId] ?? 0, color: barColors[1], width: 8),
-                          ],
-                        ),
+                      final Map<String, double> netMap = {
+                        for (var m in sortedMembers) m.userId: (paidMap[m.userId] ?? 0) - (owedMap[m.userId] ?? 0)
+                      };
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Group Summary Table', style: Theme.of(context).textTheme.titleMedium),
+                          const SizedBox(height: 8),
+                          DataTable(
+                            columns: const [
+                              DataColumn(label: Text('Member')),
+                              DataColumn(label: Text('Paid')),
+                              DataColumn(label: Text('Owes')),
+                              DataColumn(label: Text('Net')),
+                            ],
+                            rows: [
+                              for (var m in sortedMembers)
+                                DataRow(cells: [
+                                  DataCell(Text(m.username)),
+                                  DataCell(Text(paidMap[m.userId]!.toStringAsFixed(2))),
+                                  DataCell(Text(owedMap[m.userId]!.toStringAsFixed(2))),
+                                  DataCell(Text(netMap[m.userId]!.toStringAsFixed(2), style: TextStyle(color: (netMap[m.userId]! > 0) ? Colors.green : (netMap[m.userId]! < 0) ? Colors.red : Colors.grey))),
+                                ]),
+                            ],
+                          ),
+                        ],
                       );
-                    }
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        SizedBox(
-                          height: 140,
-                          child: BarChart(
-                            BarChartData(
-                              barGroups: barGroups,
-                              titlesData: FlTitlesData(
-                                leftTitles: AxisTitles(
-                                  sideTitles: SideTitles(showTitles: true, reservedSize: 32),
-                                ),
-                                bottomTitles: AxisTitles(
-                                  sideTitles: SideTitles(
-                                    showTitles: true,
-                                    getTitlesWidget: (double value, TitleMeta meta) {
-                                      final idx = value.toInt();
-                                      if (idx < 0 || idx >= members.length) return const SizedBox.shrink();
-                                      return Padding(
-                                        padding: const EdgeInsets.only(top: 4.0),
-                                        child: Text(members[idx].username, style: const TextStyle(fontSize: 10), overflow: TextOverflow.ellipsis),
-                                      );
-                                    },
-                                  ),
-                                ),
-                                rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                                topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                              ),
-                              gridData: FlGridData(show: false),
-                              borderData: FlBorderData(show: false),
-                              barTouchData: BarTouchData(enabled: false),
-                              groupsSpace: 16,
-                              maxY: [
-                                ...paidMap.values,
-                                ...owedMap.values
-                              ].fold<double>(0, (prev, e) => e > prev ? e : prev) * 1.2,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Container(width: 12, height: 12, color: barColors[0]),
-                            const SizedBox(width: 4),
-                            const Text('Paid', style: TextStyle(fontSize: 12)),
-                            const SizedBox(width: 16),
-                            Container(width: 12, height: 12, color: barColors[1]),
-                            const SizedBox(width: 4),
-                            const Text('Owes', style: TextStyle(fontSize: 12)),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                      ],
-                    );
-                  },
-                ),
-                FutureBuilder<Map<String, double>>(
-                  future: groupProvider.calculateGroupBalances(group.id, group.members),
-                  builder: (context, balancesSnapshot) {
-                    if (balancesSnapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-                    if (balancesSnapshot.hasError) {
-                      return Text('Error loading balances: ${balancesSnapshot.error}', style: TextStyle(color: Colors.red));
-                    }
-
-                    final balances = balancesSnapshot.data ?? {};
-                    double totalGroupExpenses = 0.0; // Calculate total expenses separately
-
-                    // Recalculate total group expenses from the raw expense stream for accuracy
-                    return StreamBuilder<QuerySnapshot>(
-                      stream: FirebaseFirestore.instance
-                          .collection('groups')
-                          .doc(widget.groupId)
-                          .collection('expenses')
-                          .orderBy('timestamp', descending: true)
-                          .snapshots(),
-                      builder: (context, expenseSnapshot) {
-                        if (expenseSnapshot.hasError) {
-                          return Text('Error loading expenses for total: ${expenseSnapshot.error}', style: TextStyle(color: Colors.red));
-                        }
-                        if (expenseSnapshot.connectionState == ConnectionState.waiting) {
-                          return const SizedBox.shrink(); // Hide while waiting, balances already loading
-                        }
-
-                        totalGroupExpenses = expenseSnapshot.data!.docs.fold(0.0, (sum, doc) {
-                          final data = doc.data() as Map<String, dynamic>;
-                          final amount = data['amount'];
-                          if (amount == null) return sum;
-                          return sum + (amount is num ? amount.toDouble() : 0.0);
-                        });
-
-                        return Card(
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          color: Theme.of(context).colorScheme.tertiary.withOpacity(0.1),
-                          child: Padding(
-                            padding: const EdgeInsets.all(16.0),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Total Group Expenses: \$${totalGroupExpenses.toStringAsFixed(2)}',
-                                  style: Theme.of(context).textTheme.titleMedium,
-                                ),
-                                const SizedBox(height: 16),
-                                Text(
-                                  'Individual Balances:',
-                                  style: Theme.of(context).textTheme.titleSmall,
-                                ),
-                                const SizedBox(height: 8),
-                                // List individual balances
-                                ...groupMembers.map((member) {
-                                  final balance = balances[member.userId] ?? 0.0;
-                                  Color balanceColor = balance == 0
-                                      ? Colors.grey
-                                      : (balance > 0 ? Colors.green : Colors.red);
-                                  String balanceText = balance >= 0
-                                      ? 'Gets back: \$${balance.toStringAsFixed(2)}'
-                                      : 'Owes: \$${balance.abs().toStringAsFixed(2)}';
-
-                                  return Padding(
-                                    padding: const EdgeInsets.symmetric(vertical: 4.0),
-                                    child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Flexible(
-                                          child: Text(
-                                            member.username,
-                                            style: Theme.of(context).textTheme.bodyMedium,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                        Text(balanceText, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: balanceColor, fontWeight: FontWeight.bold)),
-                                      ],
-                                    ),
-                                  );
-                                }).toList(),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    );
-                  },
+                    },
+                  ),
                 ),
                 // Expenses History Section
                 Padding(
@@ -703,6 +599,41 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                                                   });
                                                 },
                                               ),
+                                            if (isAdmin)
+                                              IconButton(
+                                                icon: Icon(Icons.delete, color: Colors.red),
+                                                tooltip: 'Delete Expense',
+                                                onPressed: () async {
+                                                  final confirm = await showDialog<bool>(
+                                                    context: context,
+                                                    builder: (context) => AlertDialog(
+                                                      title: const Text('Delete Expense'),
+                                                      content: const Text('Are you sure you want to delete this expense?'),
+                                                      actions: [
+                                                        TextButton(
+                                                          onPressed: () => Navigator.pop(context, false),
+                                                          child: const Text('Cancel'),
+                                                        ),
+                                                        TextButton(
+                                                          onPressed: () => Navigator.pop(context, true),
+                                                          child: const Text('Delete', style: TextStyle(color: Colors.red)),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  );
+                                                  if (confirm == true) {
+                                                    await FirebaseFirestore.instance
+                                                        .collection('groups')
+                                                        .doc(widget.groupId)
+                                                        .collection('expenses')
+                                                        .doc(expense.id)
+                                                        .delete();
+                                                    ScaffoldMessenger.of(context).showSnackBar(
+                                                      const SnackBar(content: Text('Expense deleted.')),
+                                                    );
+                                                  }
+                                                },
+                                              ),
                                           ],
                                         ),
                                         children: [
@@ -807,6 +738,41 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                                                     'groupId': widget.groupId,
                                                     'expenseId': expense.id,
                                                   });
+                                                },
+                                              ),
+                                            if (isAdmin)
+                                              IconButton(
+                                                icon: Icon(Icons.delete, color: Colors.red),
+                                                tooltip: 'Delete Expense',
+                                                onPressed: () async {
+                                                  final confirm = await showDialog<bool>(
+                                                    context: context,
+                                                    builder: (context) => AlertDialog(
+                                                      title: const Text('Delete Expense'),
+                                                      content: const Text('Are you sure you want to delete this expense?'),
+                                                      actions: [
+                                                        TextButton(
+                                                          onPressed: () => Navigator.pop(context, false),
+                                                          child: const Text('Cancel'),
+                                                        ),
+                                                        TextButton(
+                                                          onPressed: () => Navigator.pop(context, true),
+                                                          child: const Text('Delete', style: TextStyle(color: Colors.red)),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  );
+                                                  if (confirm == true) {
+                                                    await FirebaseFirestore.instance
+                                                        .collection('groups')
+                                                        .doc(widget.groupId)
+                                                        .collection('expenses')
+                                                        .doc(expense.id)
+                                                        .delete();
+                                                    ScaffoldMessenger.of(context).showSnackBar(
+                                                      const SnackBar(content: Text('Expense deleted.')),
+                                                    );
+                                                  }
                                                 },
                                               ),
                                           ],
@@ -970,7 +936,6 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                 leading: const Icon(Icons.file_download),
                 title: const Text('Export Expenses'),
                 onTap: () async {
-                  Navigator.pop(context);
                   final format = await showDialog<String>(
                     context: context,
                     builder: (context) => AlertDialog(
@@ -988,50 +953,141 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                       ],
                     ),
                   );
-                  if (format == null) return;
+                  if (format == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('No export format selected.')),
+                    );
+                    return;
+                  }
                   try {
-                    // Fetch expenses
                     final expensesSnapshot = await FirebaseFirestore.instance
                         .collection('groups')
                         .doc(group.id)
                         .collection('expenses')
                         .orderBy('timestamp', descending: false)
                         .get();
-                    // Fetch user info for paidBy
-                    final userIds = expensesSnapshot.docs.map((doc) => doc['paidBy'] as String?).whereType<String>().toSet().toList();
-                    final usersSnapshot = await FirebaseFirestore.instance.collection('users').where(FieldPath.documentId, whereIn: userIds).get();
-                    final userMap = {for (var doc in usersSnapshot.docs) doc.id: doc.data()['username'] ?? doc.id};
+
+                    if (expensesSnapshot.docs.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('No expenses to export.')),
+                      );
+                      return;
+                    }
+
+                    // Get all group members for split columns
+                    final groupMembers = group.members;
+                    final memberIdToName = {for (var m in groupMembers) m.userId: m.username};
+
+                    // Get user info for paidBy
+                    final userIds = expensesSnapshot.docs
+                        .map((doc) => doc['paidBy'] as String?)
+                        .whereType<String>()
+                        .toSet()
+                        .toList();
+                    final usersSnapshot = await FirebaseFirestore.instance
+                        .collection('users')
+                        .where(FieldPath.documentId, whereIn: userIds)
+                        .get();
+                    final userMap = {
+                      for (var doc in usersSnapshot.docs)
+                        doc.id: doc.data()['username'] ?? doc.id
+                    };
+                    final userEmailMap = {
+                      for (var doc in usersSnapshot.docs)
+                        doc.id: doc.data()['email'] ?? ''
+                    };
+
                     final dateFormat = DateFormat('yyyy-MM-dd HH:mm');
-                    List<List<dynamic>> rows = [
-                      ['Date', 'Title/Description', 'Amount', 'Paid By', 'Split Type', 'Notes'],
+                    // Header: add a column for each member's share
+                    List<String> header = [
+                      'Date',
+                      'Title/Description',
+                      'Amount',
+                      'Paid By',
+                      'Paid By Email',
+                      'Split Type',
+                      ...groupMembers.map((m) => 'Share: ${m.username}'),
+                      'Notes',
+                      'Category'
                     ];
+                    List<List<dynamic>> rows = [header];
+
                     for (var doc in expensesSnapshot.docs) {
                       final data = doc.data();
                       DateTime? dateObj;
                       if (data['expenseDate'] != null) {
-                        dateObj = (data['expenseDate'] as Timestamp).toDate();
-                      } else if (data['timestamp'] != null) {
-                        dateObj = (data['timestamp'] as Timestamp).toDate();
+                        if (data['expenseDate'] is Timestamp) {
+                          dateObj = (data['expenseDate'] as Timestamp).toDate();
+                        } else if (data['expenseDate'] is String) {
+                          dateObj = DateTime.tryParse(data['expenseDate']);
+                        }
                       }
+                      if (dateObj == null && data['timestamp'] != null) {
+                        if (data['timestamp'] is Timestamp) {
+                          dateObj = (data['timestamp'] as Timestamp).toDate();
+                        } else if (data['timestamp'] is String) {
+                          dateObj = DateTime.tryParse(data['timestamp']);
+                        }
+                      }
+                      // Always format as a string for export
                       final date = dateObj != null ? dateFormat.format(dateObj) : '';
-                      final paidByName = userMap[data['paidBy']] ?? data['paidBy'] ?? '';
+                      final paidById = data['paidBy'];
+                      final paidByName = userMap[paidById] ?? paidById ?? '';
+                      final paidByEmail = userEmailMap[paidById] ?? '';
+                      final splitType = data['splitType'] ?? '';
+                      final notes = data['notes'] ?? '';
+                      final category = data['category'] ?? '';
+                      final amount = data['amount'] ?? '';
+                      final description = data['description'] ?? data['title'] ?? '';
+
+                      // Prepare shares for each member
+                      List<String> shares = [];
+                      if (splitType == 'custom' && data['splitData'] is Map) {
+                        final splitData = data['splitData'] as Map<String, dynamic>;
+                        for (var m in groupMembers) {
+                          final share = splitData[m.userId];
+                          shares.add(share != null ? share.toString() : '');
+                        }
+                      } else if (splitType == 'equal' && data['splitAmong'] is List) {
+                        // Equal split: divide amount equally among splitAmong
+                        final splitAmong = List<String>.from(data['splitAmong'] ?? []);
+                        final perMember = (amount is num && splitAmong.isNotEmpty)
+                            ? (amount / splitAmong.length)
+                            : '';
+                        for (var m in groupMembers) {
+                          shares.add(splitAmong.contains(m.userId) ? perMember.toString() : '');
+                        }
+                      } else {
+                        // Fallback: leave shares blank
+                        for (var m in groupMembers) {
+                          shares.add('');
+                        }
+                      }
+
                       rows.add([
                         date,
-                        data['description'] ?? data['title'] ?? '',
-                        data['amount'] ?? '',
+                        description,
+                        amount,
                         paidByName,
-                        data['splitType'] ?? '',
-                        data['notes'] ?? '',
+                        paidByEmail,
+                        splitType,
+                        ...shares,
+                        notes,
+                        category
                       ]);
                     }
+
+                    final dir = await getTemporaryDirectory();
                     if (format == 'csv') {
                       String csvData = const ListToCsvConverter().convert(rows);
-                      final dir = await getTemporaryDirectory();
                       final file = File('${dir.path}/${group.name}_expenses.csv');
                       await file.writeAsString(csvData);
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(content: Text('Expenses exported to ${file.path}')),
                       );
+                      await Share.shareXFiles([
+                        XFile(file.path, mimeType: 'text/csv', name: '${group.name}_expenses.csv'),
+                      ], subject: 'Exported Expenses CSV');
                     } else if (format == 'pdf') {
                       final pdf = pw.Document();
                       pdf.addPage(
@@ -1043,14 +1099,18 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                           ),
                         ),
                       );
-                      final dir = await getTemporaryDirectory();
                       final file = File('${dir.path}/${group.name}_expenses.pdf');
                       await file.writeAsBytes(await pdf.save());
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(content: Text('Expenses exported to ${file.path}')),
                       );
+                      await Share.shareXFiles([
+                        XFile(file.path, mimeType: 'application/pdf', name: '${group.name}_expenses.pdf'),
+                      ], subject: 'Exported Expenses PDF');
                     }
-                  } catch (e) {
+                    Navigator.pop(context);
+                  } catch (e, stack) {
+                    print('Export error: $e\n$stack');
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(content: Text('Failed to export: $e')),
                     );

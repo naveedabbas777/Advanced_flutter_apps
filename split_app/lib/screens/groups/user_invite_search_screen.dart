@@ -1,24 +1,32 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'direct_chat_screen.dart';
+import 'package:provider/provider.dart';
+import '../../providers/group_provider.dart';
+import '../../providers/auth_provider.dart';
 
-class UserSearchScreen extends StatefulWidget {
+class UserInviteSearchScreen extends StatefulWidget {
+  final String groupId;
+  final List<String> currentMemberIds;
   final String currentUserId;
-  const UserSearchScreen({Key? key, required this.currentUserId}) : super(key: key);
+  const UserInviteSearchScreen({
+    Key? key,
+    required this.groupId,
+    required this.currentMemberIds,
+    required this.currentUserId,
+  }) : super(key: key);
 
   @override
-  State<UserSearchScreen> createState() => _UserSearchScreenState();
+  State<UserInviteSearchScreen> createState() => _UserInviteSearchScreenState();
 }
 
-class _UserSearchScreenState extends State<UserSearchScreen> {
+class _UserInviteSearchScreenState extends State<UserInviteSearchScreen> {
   final TextEditingController _searchController = TextEditingController();
   List<DocumentSnapshot> _results = [];
   bool _isLoading = false;
 
   Future<void> _searchUsers() async {
     setState(() { _isLoading = true; });
-    final query = _searchController.text.trim();
+    final query = _searchController.text.trim().toLowerCase();
     if (query.isEmpty) {
       setState(() { _results = []; _isLoading = false; });
       return;
@@ -33,37 +41,48 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
         .get();
     final allDocs = {...usersByEmail.docs, ...usersByUsername.docs};
     setState(() {
-      _results = allDocs.where((doc) => doc.id != widget.currentUserId).toList();
+      _results = allDocs
+        .where((doc) => doc.id != widget.currentUserId && !widget.currentMemberIds.contains(doc.id))
+        .toList();
       _isLoading = false;
     });
   }
 
-  void _startChat(String otherUserId, String otherUserName) async {
-    final currentUserId = widget.currentUserId;
-    final chatId = [currentUserId, otherUserId]..sort();
-    final chatDocId = chatId.join('_');
-    // Ensure chat document exists
-    final chatDoc = FirebaseFirestore.instance.collection('direct_chats').doc(chatDocId);
-    await chatDoc.set({
-      'participants': [currentUserId, otherUserId],
-      'lastMessageTime': FieldValue.serverTimestamp(),
-      'lastMessage': '',
-    }, SetOptions(merge: true));
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (_) => DirectChatScreen(
-          chatId: chatDocId,
-          otherUserId: otherUserId,
-          otherUserName: otherUserName,
-        ),
-      ),
-    );
+  void _inviteUser(DocumentSnapshot userDoc) async {
+    final userData = userDoc.data() as Map<String, dynamic>;
+    final email = userData['email'];
+    final groupProvider = Provider.of<GroupProvider>(context, listen: false);
+    final authProvider = Provider.of<AppAuthProvider>(context, listen: false);
+    final inviterUsername = authProvider.currentUserModel?.username ?? '';
+    final inviterEmail = authProvider.currentUserModel?.email ?? '';
+    try {
+      await groupProvider.inviteUserToGroup(
+        groupId: widget.groupId,
+        invitedBy: widget.currentUserId,
+        invitedByUsername: inviterUsername,
+        invitedByEmail: inviterEmail,
+        invitedUserEmail: email,
+      );
+      if (groupProvider.error != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(groupProvider.error!), backgroundColor: Colors.red),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Invitation sent successfully!'), backgroundColor: Colors.green),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to send invitation: $e'), backgroundColor: Colors.red),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Start New Chat')),
+      appBar: AppBar(title: const Text('Invite Member')),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -101,7 +120,7 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
                           leading: CircleAvatar(child: Text(userName.substring(0, 1).toUpperCase())),
                           title: Text(userName),
                           subtitle: Text(userData['email'] ?? ''),
-                          onTap: () => _startChat(userDoc.id, userName),
+                          onTap: () => _inviteUser(userDoc),
                         );
                       },
                     ),

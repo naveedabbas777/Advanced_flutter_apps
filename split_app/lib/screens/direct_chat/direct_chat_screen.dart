@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:async';
+import 'package:split_app/models/direct_message_model.dart';
 
 class DirectChatScreen extends StatefulWidget {
   final String chatId;
@@ -72,7 +73,7 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
                 }
-                final messages = snapshot.data?.docs ?? [];
+                final messages = snapshot.data?.docs.map((doc) => DirectMessage.fromFirestore(doc)).toList() ?? [];
                 if (messages.isEmpty) {
                   return const Center(child: Text('No messages yet.'));
                 }
@@ -81,8 +82,8 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
                   reverse: false,
                   itemCount: messages.length,
                   itemBuilder: (context, index) {
-                    final msg = messages[index].data() as Map<String, dynamic>;
-                    final isMe = msg['senderId'] == userId;
+                    final msg = messages[index];
+                    final isMe = msg.senderId == userId;
                     return Align(
                       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
                       child: Container(
@@ -96,39 +97,15 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
                           crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                           children: [
                             Text(
-                              msg['senderName'] ?? 'Unknown',
+                              msg.senderName,
                               style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey[700], fontSize: 12),
                             ),
                             const SizedBox(height: 2),
-                            if (msg['imageUrl'] != null)
-                              GestureDetector(
-                                onTap: () {
-                                  showDialog(
-                                    context: context,
-                                    builder: (_) => Dialog(
-                                      child: InteractiveViewer(
-                                        child: Image.network(msg['imageUrl']),
-                                      ),
-                                    ),
-                                  );
-                                },
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: Image.network(
-                                    msg['imageUrl'],
-                                    width: 180,
-                                    height: 180,
-                                    fit: BoxFit.cover,
-                                  ),
-                                ),
-                              ),
-                            if (msg['text'] != null && msg['text'].toString().isNotEmpty)
-                              Text(msg['text'] ?? '', style: TextStyle(fontSize: 16)),
-                            if (msg['timestamp'] != null)
-                              Text(
-                                (msg['timestamp'] as Timestamp).toDate().toLocal().toString().substring(0, 16),
-                                style: TextStyle(fontSize: 10, color: Colors.grey[500]),
-                              ),
+                            Text(msg.text, style: TextStyle(fontSize: 16)),
+                            Text(
+                              msg.timestamp.toLocal().toString().substring(0, 16),
+                              style: TextStyle(fontSize: 10, color: Colors.grey[500]),
+                            ),
                           ],
                         ),
                       ),
@@ -137,29 +114,6 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
                 );
               },
             ),
-          ),
-          StreamBuilder<DocumentSnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('direct_chats')
-                .doc(widget.chatId)
-                .collection('typing')
-                .doc(widget.otherUserId)
-                .snapshots(),
-            builder: (context, snapshot) {
-              if (snapshot.hasData && snapshot.data!.exists) {
-                final data = snapshot.data!.data() as Map<String, dynamic>?;
-                if (data != null && data['typing'] == true) {
-                  return Padding(
-                    padding: const EdgeInsets.only(left: 16, bottom: 4),
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text('Typing...', style: TextStyle(color: Colors.grey[600], fontStyle: FontStyle.italic)),
-                    ),
-                  );
-                }
-              }
-              return SizedBox.shrink();
-            },
           ),
           Divider(height: 1),
           Padding(
@@ -219,6 +173,14 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
       'senderName': username,
       'timestamp': FieldValue.serverTimestamp(),
     });
+    // Update the chat with the last message info
+    await FirebaseFirestore.instance
+      .collection('direct_chats')
+      .doc(widget.chatId)
+      .update({
+        'lastMessageTime': FieldValue.serverTimestamp(),
+        'lastMessage': text,
+      });
     _messageController.clear();
     setState(() => _isSending = false);
   }

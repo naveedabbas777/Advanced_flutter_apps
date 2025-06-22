@@ -107,6 +107,7 @@ class GroupProvider extends ChangeNotifier {
     required String groupId,
     required String invitedBy,
     required String invitedByUsername,
+    required String invitedByEmail,
     required String invitedUserEmail,
   }) async {
     try {
@@ -140,8 +141,10 @@ class GroupProvider extends ChangeNotifier {
         'groupName': group.name,
         'invitedBy': invitedBy,
         'invitedByUsername': invitedByUsername,
+        'invitedByEmail': invitedByEmail,
         'invitedUserId': invitedUserId,
         'invitedUserEmail': invitedUserEmail,
+        'invitedUserName': invitedUser['username'] ?? '',
         'status': 'pending',
         'createdAt': FieldValue.serverTimestamp(),
       });
@@ -337,6 +340,22 @@ class GroupProvider extends ChangeNotifier {
         'expenseCount': FieldValue.increment(1),
       });
 
+      // Send group expense notification to all members
+      final groupDoc = await _firestore.collection('groups').doc(groupId).get();
+      final groupName = groupDoc.data()?['name'] ?? 'Group';
+      final memberIds = List<String>.from(groupDoc.data()?['memberIds'] ?? []);
+      for (final userId in memberIds) {
+        await _firestore.collection('group_expense_notifications').add({
+          'userId': userId,
+          'groupId': groupId,
+          'groupName': groupName,
+          'expenseTitle': description,
+          'amount': amount,
+          'action': 'added',
+          'timestamp': FieldValue.serverTimestamp(),
+        });
+      }
+
       _isLoading = false;
       notifyListeners();
     } catch (e) {
@@ -491,5 +510,76 @@ class GroupProvider extends ChangeNotifier {
     final groups = snapshot.docs.map((doc) => GroupModel.fromFirestore(doc)).toList();
     await saveGroupsToPrefs(groups); // cache after fetch
     return groups;
+  }
+
+  Future<void> updateExpense({
+    required String groupId,
+    required String expenseId,
+    required String description,
+    required double amount,
+    required String paidBy,
+    required DateTime expenseDate,
+    String? notes,
+    List<String>? splitAmong,
+    Map<String, double>? customSplitAmounts,
+  }) async {
+    try {
+      _isLoading = true;
+      _error = null;
+      notifyListeners();
+
+      // Determine split type and data to store
+      String splitType;
+      dynamic splitData;
+
+      if (customSplitAmounts != null && customSplitAmounts.isNotEmpty) {
+        splitType = 'custom';
+        splitData = customSplitAmounts;
+      } else if (splitAmong != null && splitAmong.isNotEmpty) {
+        splitType = 'equal';
+        splitData = splitAmong;
+      } else {
+        throw 'Invalid split configuration. Must have splitAmong or customSplitAmounts.';
+      }
+
+      await _firestore
+          .collection('groups')
+          .doc(groupId)
+          .collection('expenses')
+          .doc(expenseId)
+          .update({
+        'description': description,
+        'amount': amount,
+        'paidBy': paidBy,
+        'expenseDate': Timestamp.fromDate(expenseDate),
+        'notes': notes,
+        'splitType': splitType,
+        'splitData': splitData,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      // Send group expense notification to all members
+      final groupDoc = await _firestore.collection('groups').doc(groupId).get();
+      final groupName = groupDoc.data()?['name'] ?? 'Group';
+      final memberIds = List<String>.from(groupDoc.data()?['memberIds'] ?? []);
+      for (final userId in memberIds) {
+        await _firestore.collection('group_expense_notifications').add({
+          'userId': userId,
+          'groupId': groupId,
+          'groupName': groupName,
+          'expenseTitle': description,
+          'amount': amount,
+          'action': 'edited',
+          'timestamp': FieldValue.serverTimestamp(),
+        });
+      }
+
+      _isLoading = false;
+      notifyListeners();
+    } catch (e) {
+      _isLoading = false;
+      _error = 'Failed to update expense: $e';
+      notifyListeners();
+    }
   }
 } 

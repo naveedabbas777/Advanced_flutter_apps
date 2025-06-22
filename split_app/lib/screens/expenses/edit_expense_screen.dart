@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:provider/provider.dart';
+import '../../providers/group_provider.dart';
 
 class EditExpenseScreen extends StatefulWidget {
   @override
@@ -164,27 +166,28 @@ class _EditExpenseScreenState extends State<EditExpenseScreen> {
         _selectedSplitAmong.isEmpty ||
         !_validateCustomSplit()) return;
     setState(() => _isLoading = true);
-    final updateData = {
-      'description': _descriptionController.text.trim(),
-      'amount': double.tryParse(_amountController.text.trim()) ?? 0.0,
-      'paidBy': _selectedPaidBy,
-      'splitType': _splitType == SplitType.custom ? 'custom' : 'equal',
-      'splitAmong': _splitType == SplitType.equal ? _selectedSplitAmong : null,
-      'splitData': _splitType == SplitType.custom ? _customSplitAmounts : null,
-      'expenseDate': Timestamp.fromDate(_selectedDate),
-      'notes': _notesController.text.trim().isEmpty
-          ? null
-          : _notesController.text.trim(),
-    };
-    updateData.removeWhere((k, v) => v == null);
-    await FirebaseFirestore.instance
-        .collection('groups')
-        .doc(groupId)
-        .collection('expenses')
-        .doc(expenseId)
-        .update(updateData);
-    setState(() => _isLoading = false);
-    if (mounted) Navigator.pop(context);
+    try {
+      await Provider.of<GroupProvider>(context, listen: false).updateExpense(
+        groupId: groupId!,
+        expenseId: expenseId!,
+        description: _descriptionController.text.trim(),
+        amount: double.tryParse(_amountController.text.trim()) ?? 0.0,
+        paidBy: _selectedPaidBy!,
+        splitAmong: _splitType == SplitType.equal ? _selectedSplitAmong : null,
+        customSplitAmounts: _splitType == SplitType.custom ? _customSplitAmounts : null,
+        expenseDate: _selectedDate,
+        notes: _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
+      );
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to update expense: \\$e')),
+        );
+      }
+    } finally {
+      setState(() => _isLoading = false);
+    }
   }
 
   @override

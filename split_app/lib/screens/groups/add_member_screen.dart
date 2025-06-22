@@ -59,6 +59,7 @@ class _AddMemberScreenState extends State<AddMemberScreen> {
           groupId: widget.groupId,
           invitedBy: authProvider.currentUserModel!.uid,
           invitedByUsername: authProvider.currentUserModel!.username,
+          invitedByEmail: authProvider.currentUserModel!.email,
           invitedUserEmail: _emailController.text.trim().toLowerCase(),
         );
 
