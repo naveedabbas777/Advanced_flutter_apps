@@ -8,7 +8,12 @@ class DirectChatScreen extends StatefulWidget {
   final String chatId;
   final String otherUserId;
   final String otherUserName;
-  const DirectChatScreen({Key? key, required this.chatId, required this.otherUserId, required this.otherUserName}) : super(key: key);
+  const DirectChatScreen(
+      {Key? key,
+      required this.chatId,
+      required this.otherUserId,
+      required this.otherUserName})
+      : super(key: key);
 
   @override
   State<DirectChatScreen> createState() => _DirectChatScreenState();
@@ -73,7 +78,10 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
                 }
-                final messages = snapshot.data?.docs.map((doc) => DirectMessage.fromFirestore(doc)).toList() ?? [];
+                final messages = snapshot.data?.docs
+                        .map((doc) => DirectMessage.fromFirestore(doc))
+                        .toList() ??
+                    [];
                 if (messages.isEmpty) {
                   return const Center(child: Text('No messages yet.'));
                 }
@@ -84,30 +92,105 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
                   itemBuilder: (context, index) {
                     final msg = messages[index];
                     final isMe = msg.senderId == userId;
-                    return Align(
-                      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-                      child: Container(
-                        margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: isMe ? Theme.of(context).colorScheme.primary.withOpacity(0.2) : Colors.grey[200],
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              msg.senderName,
-                              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey[700], fontSize: 12),
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(
+                          vertical: 2, horizontal: 8),
+                      child: Row(
+                        mainAxisAlignment: isMe
+                            ? MainAxisAlignment.end
+                            : MainAxisAlignment.start,
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          if (!isMe) ...[
+                            CircleAvatar(
+                              radius: 14,
+                              child: Text(
+                                msg.senderName.isNotEmpty
+                                    ? msg.senderName[0].toUpperCase()
+                                    : '?',
+                                style: const TextStyle(fontSize: 14),
+                              ),
                             ),
-                            const SizedBox(height: 2),
-                            Text(msg.text, style: TextStyle(fontSize: 16)),
-                            Text(
-                              msg.timestamp.toLocal().toString().substring(0, 16),
-                              style: TextStyle(fontSize: 10, color: Colors.grey[500]),
-                            ),
+                            const SizedBox(width: 6),
                           ],
-                        ),
+                          Flexible(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 8, horizontal: 12),
+                              decoration: BoxDecoration(
+                                color: isMe
+                                    ? Theme.of(context)
+                                        .colorScheme
+                                        .primary
+                                        .withOpacity(0.85)
+                                    : Colors.grey[200],
+                                borderRadius: BorderRadius.only(
+                                  topLeft: const Radius.circular(16),
+                                  topRight: const Radius.circular(16),
+                                  bottomLeft: Radius.circular(isMe ? 16 : 4),
+                                  bottomRight: Radius.circular(isMe ? 4 : 16),
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.04),
+                                    blurRadius: 2,
+                                    offset: const Offset(0, 1),
+                                  ),
+                                ],
+                              ),
+                              child: Column(
+                                crossAxisAlignment: isMe
+                                    ? CrossAxisAlignment.end
+                                    : CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (!isMe)
+                                    Padding(
+                                      padding: const EdgeInsets.only(bottom: 2),
+                                      child: Text(
+                                        msg.senderName,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.grey[700],
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ),
+                                  Text(
+                                    msg.text,
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      color:
+                                          isMe ? Colors.white : Colors.black87,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    mainAxisAlignment: MainAxisAlignment.end,
+                                    children: [
+                                      Text(
+                                        msg.timestamp
+                                            .toLocal()
+                                            .toString()
+                                            .substring(11, 16),
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          color: isMe
+                                              ? Colors.white70
+                                              : Colors.grey[600],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          if (isMe) ...[
+                            const SizedBox(width: 6),
+                          ],
+                        ],
                       ),
                     );
                   },
@@ -143,7 +226,10 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
                 const SizedBox(width: 8),
                 IconButton(
                   icon: _isSending
-                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2))
                       : const Icon(Icons.send),
                   onPressed: _isSending ? null : _sendMessage,
                   color: Theme.of(context).colorScheme.primary,
@@ -162,11 +248,12 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
     setState(() => _isSending = true);
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
-    final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+    final userDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .get();
     final username = userDoc.data()?['username'] ?? user.email ?? 'Unknown';
-    await FirebaseFirestore.instance
-        .collection('direct_messages')
-        .add({
+    await FirebaseFirestore.instance.collection('direct_messages').add({
       'chatId': widget.chatId,
       'text': text,
       'senderId': user.uid,
@@ -175,13 +262,13 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
     });
     // Update the chat with the last message info
     await FirebaseFirestore.instance
-      .collection('direct_chats')
-      .doc(widget.chatId)
-      .update({
-        'lastMessageTime': FieldValue.serverTimestamp(),
-        'lastMessage': text,
-      });
+        .collection('direct_chats')
+        .doc(widget.chatId)
+        .update({
+      'lastMessageTime': FieldValue.serverTimestamp(),
+      'lastMessage': text,
+    });
     _messageController.clear();
     setState(() => _isSending = false);
   }
-} 
+}

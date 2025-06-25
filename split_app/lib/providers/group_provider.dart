@@ -32,15 +32,17 @@ class GroupProvider extends ChangeNotifier {
         .where('memberIds', arrayContains: userId)
         .snapshots()
         .map((snapshot) {
-          final groups = snapshot.docs
-              .map((doc) => GroupModel.fromFirestore(doc))
-              .toList();
-          saveGroupsToPrefs(groups); // cache after fetch
-          return groups;
-        });
+      final groups =
+          snapshot.docs.map((doc) => GroupModel.fromFirestore(doc)).toList();
+      saveGroupsToPrefs(groups); // cache after fetch
+      return groups;
+    });
   }
 
-  Future<void> createGroup(String name, UserModel creator, {String? photoUrl}) async {
+  Future<void> createGroup(String name, UserModel creator,
+      {String? photoUrl,
+      required String? description,
+      double? initialAmount}) async {
     try {
       _setLoading(true);
       _error = null;
@@ -61,6 +63,8 @@ class GroupProvider extends ChangeNotifier {
         ],
         'memberIds': [creator.uid],
         if (photoUrl != null) 'photoUrl': photoUrl,
+        if (description != null) 'description': description,
+        if (initialAmount != null) 'initialAmount': initialAmount,
       });
 
       // Add group to creator's groups list
@@ -89,7 +93,8 @@ class GroupProvider extends ChangeNotifier {
       // Load group details
       _groups = [];
       for (String groupId in groupIds) {
-        final groupDoc = await _firestore.collection('groups').doc(groupId).get();
+        final groupDoc =
+            await _firestore.collection('groups').doc(groupId).get();
         if (groupDoc.exists) {
           _groups.add(GroupModel.fromFirestore(groupDoc));
         }
@@ -130,7 +135,7 @@ class GroupProvider extends ChangeNotifier {
       // Check if user is already a member
       final groupDoc = await _firestore.collection('groups').doc(groupId).get();
       final group = GroupModel.fromFirestore(groupDoc);
-      
+
       if (group.members.any((member) => member.userId == invitedUserId)) {
         throw 'User is already a member of this group';
       }
@@ -198,7 +203,10 @@ class GroupProvider extends ChangeNotifier {
       });
 
       // Update invitation status
-      await _firestore.collection('group_invitations').doc(invitationId).update({
+      await _firestore
+          .collection('group_invitations')
+          .doc(invitationId)
+          .update({
         'status': 'accepted',
         'acceptedAt': FieldValue.serverTimestamp(),
       });
@@ -228,7 +236,10 @@ class GroupProvider extends ChangeNotifier {
       // });
 
       // Update invitation status
-      await _firestore.collection('group_invitations').doc(invitationId).update({
+      await _firestore
+          .collection('group_invitations')
+          .doc(invitationId)
+          .update({
         'status': 'rejected',
         'rejectedAt': FieldValue.serverTimestamp(),
       });
@@ -384,7 +395,8 @@ class GroupProvider extends ChangeNotifier {
       final data = doc.data();
       final String paidBy = data['paidBy'];
       final double amount = (data['amount'] as num).toDouble();
-      final String splitType = data['splitType'] ?? 'equal'; // Default to 'equal'
+      final String splitType =
+          data['splitType'] ?? 'equal'; // Default to 'equal'
 
       // Add the full amount to the person who paid
       balances[paidBy] = (balances[paidBy] ?? 0.0) + amount;
@@ -394,13 +406,16 @@ class GroupProvider extends ChangeNotifier {
         if (splitAmong.isNotEmpty) {
           final double share = amount / splitAmong.length;
           for (var memberId in splitAmong) {
-            balances[memberId.toString()] = (balances[memberId.toString()] ?? 0.0) - share;
+            balances[memberId.toString()] =
+                (balances[memberId.toString()] ?? 0.0) - share;
           }
         }
       } else if (splitType == 'custom') {
-        final Map<String, dynamic> customSplitAmounts = data['customSplitAmounts'] ?? {};
+        final Map<String, dynamic> customSplitAmounts =
+            data['customSplitAmounts'] ?? {};
         customSplitAmounts.forEach((userId, customAmount) {
-          balances[userId] = (balances[userId] ?? 0.0) - (customAmount as num).toDouble();
+          balances[userId] =
+              (balances[userId] ?? 0.0) - (customAmount as num).toDouble();
         });
       }
     }
@@ -433,7 +448,7 @@ class GroupProvider extends ChangeNotifier {
           .doc(groupId)
           .collection('expenses')
           .get();
-      
+
       for (var doc in expensesSnapshot.docs) {
         await doc.reference.delete();
       }
@@ -460,7 +475,8 @@ class GroupProvider extends ChangeNotifier {
     return members.any((member) => member.userId == userId && member.isAdmin);
   }
 
-  Future<List<GroupModel>> fetchUserGroupsPage(String userId, {DocumentSnapshot? startAfter, int limit = 10}) async {
+  Future<List<GroupModel>> fetchUserGroupsPage(String userId,
+      {DocumentSnapshot? startAfter, int limit = 10}) async {
     Query query = _firestore
         .collection('groups')
         .where('memberIds', arrayContains: userId)
@@ -477,12 +493,8 @@ class GroupProvider extends ChangeNotifier {
 
   // Returns a stream of all groups (for admin or discovery purposes)
   Stream<List<GroupModel>> getAllGroupsStream() {
-    return _firestore
-        .collection('groups')
-        .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => GroupModel.fromFirestore(doc))
-            .toList());
+    return _firestore.collection('groups').snapshots().map((snapshot) =>
+        snapshot.docs.map((doc) => GroupModel.fromFirestore(doc)).toList());
   }
 
   // Save groups to shared preferences
@@ -507,7 +519,8 @@ class GroupProvider extends ChangeNotifier {
         .collection('groups')
         .where('memberIds', arrayContains: userId)
         .get();
-    final groups = snapshot.docs.map((doc) => GroupModel.fromFirestore(doc)).toList();
+    final groups =
+        snapshot.docs.map((doc) => GroupModel.fromFirestore(doc)).toList();
     await saveGroupsToPrefs(groups); // cache after fetch
     return groups;
   }
@@ -582,4 +595,4 @@ class GroupProvider extends ChangeNotifier {
       notifyListeners();
     }
   }
-} 
+}

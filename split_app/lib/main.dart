@@ -3,6 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
+import 'package:split_app/screens/splash_screen.dart';
 
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/register_screen.dart';
@@ -48,36 +49,23 @@ class MyApp extends StatelessWidget {
             theme: ThemeProvider.lightTheme,
             darkTheme: ThemeProvider.darkTheme,
             themeMode: themeProvider.themeMode,
-            home: Consumer<AppAuthProvider>(
-              builder: (context, authProvider, _) {
-                if (authProvider.isLoading) {
-                  return const Scaffold(
-                    body: Center(
-                      child: CircularProgressIndicator(),
-                    ),
-                  );
-                }
-                return authProvider.currentUser == null
-                    ? LoginScreen()
-                    : HomeScreen();
-              },
-            ),
+            home: SplashScreen(),
             onGenerateRoute: (settings) {
-              final authProvider = Provider.of<AppAuthProvider>(context, listen: false);
-              
-              if (authProvider.currentUser == null) {
-                return MaterialPageRoute(builder: (_) => LoginScreen());
-              }
+              final authProvider =
+                  Provider.of<AppAuthProvider>(context, listen: false);
 
               switch (settings.name) {
                 case '/':
-                  return MaterialPageRoute(builder: (_) => HomeScreen());
+                  return MaterialPageRoute(builder: (_) => SplashScreen());
                 case '/login':
                   return MaterialPageRoute(builder: (_) => LoginScreen());
+                case '/home':
+                  return MaterialPageRoute(builder: (_) => HomeScreen());
                 case '/register':
                   return MaterialPageRoute(builder: (_) => RegisterScreen());
                 case '/forgot-password':
-                  return MaterialPageRoute(builder: (_) => ForgotPasswordScreen());
+                  return MaterialPageRoute(
+                      builder: (_) => ForgotPasswordScreen());
                 case '/profile':
                   return MaterialPageRoute(builder: (_) => ProfileScreen());
                 case '/invitations':

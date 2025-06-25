@@ -12,6 +12,7 @@ import '../direct_chat/user_search_screen.dart';
 import 'package:badges/badges.dart' as badges;
 import 'package:intl/intl.dart';
 import 'archived_screen.dart';
+import 'package:lottie/lottie.dart';
 
 // Import the tab bodies as separate widgets
 import 'tabs/groups_tab.dart';
@@ -67,27 +68,46 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      body: Center(
-        child: _widgetOptions.elementAt(_selectedIndex),
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: Lottie.asset(
+              'assets/lotties/homebg3.json',
+              fit: BoxFit.cover,
+              repeat: true,
+            ),
+          ),
+          Center(
+            child: _widgetOptions.elementAt(_selectedIndex),
+          ),
+        ],
       ),
       floatingActionButton: _selectedIndex == 0
           ? FloatingActionButton(
               onPressed: () {
-                Navigator.push(context, MaterialPageRoute(builder: (context) => CreateGroupScreen()));
+                Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (context) => CreateGroupScreen()));
               },
               child: const Icon(Icons.add),
               tooltip: 'Create Group',
             )
           : FloatingActionButton(
               onPressed: () {
-                final authProvider = Provider.of<AppAuthProvider>(context, listen: false);
+                final authProvider =
+                    Provider.of<AppAuthProvider>(context, listen: false);
                 final currentUserId = authProvider.currentUser?.uid;
                 if (currentUserId != null) {
-                  Navigator.push(context, MaterialPageRoute(builder: (context) => UserSearchScreen(currentUserId: currentUserId)));
+                  Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (context) =>
+                              UserSearchScreen(currentUserId: currentUserId)));
                 } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text("Cannot start a new chat. User not logged in."))
-                  );
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: Text(
+                          "Cannot start a new chat. User not logged in.")));
                 }
               },
               child: const Icon(Icons.message),

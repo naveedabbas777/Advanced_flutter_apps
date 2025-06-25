@@ -21,6 +21,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:split_app/screens/groups/group_summary_screen.dart';
 import 'package:split_app/screens/groups/user_invite_search_screen.dart';
+import 'package:split_app/screens/groups/settle_up_screen.dart';
 
 // Re-applying to refresh parsing due to persistent 'Expected an identifier' error.
 class GroupDetailsScreen extends StatefulWidget {
@@ -51,6 +52,9 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
           .doc(widget.groupId)
           .snapshots(),
       builder: (context, snapshot) {
+        final screenWidth = MediaQuery.of(context).size.width;
+        final horizontalPadding = screenWidth < 500 ? 8.0 : 24.0;
+        final maxContentWidth = 600.0;
         if (snapshot.hasError) {
           return Scaffold(
             appBar: AppBar(title: const Text('Error')),
@@ -72,7 +76,8 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                 children: [
                   Icon(Icons.group_off, size: 60, color: Colors.grey),
                   SizedBox(height: 16),
-                  Text('Group not found.', style: TextStyle(fontSize: 20, color: Colors.grey)),
+                  Text('Group not found.',
+                      style: TextStyle(fontSize: 20, color: Colors.grey)),
                   SizedBox(height: 16),
                   ElevatedButton.icon(
                     icon: Icon(Icons.home),
@@ -90,6 +95,23 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
         List<GroupMember> groupMembers = group.members;
         return Scaffold(
           appBar: AppBar(
+            leading: isAdmin
+                ? IconButton(
+                    icon: const Icon(Icons.handshake_outlined),
+                    tooltip: 'Settle Up',
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => SettleUpScreen(
+                            groupId: group.id,
+                            groupName: group.name,
+                            members: group.members,
+                          ),
+                        ),
+                      );
+                    },
+                  )
+                : null,
             title: Text(groupName),
             actions: [
               IconButton(
@@ -115,7 +137,8 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                     MaterialPageRoute(
                       builder: (_) => UserInviteSearchScreen(
                         groupId: group.id,
-                        currentMemberIds: group.members.map((m) => m.userId).toList(),
+                        currentMemberIds:
+                            group.members.map((m) => m.userId).toList(),
                         currentUserId: userId,
                       ),
                     ),
@@ -131,8 +154,10 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                     .snapshots(),
                 builder: (context, chatViewSnapshot) {
                   Timestamp? lastSeen;
-                  if (chatViewSnapshot.hasData && chatViewSnapshot.data!.exists) {
-                    lastSeen = chatViewSnapshot.data!.get('lastSeen') as Timestamp?;
+                  if (chatViewSnapshot.hasData &&
+                      chatViewSnapshot.data!.exists) {
+                    lastSeen =
+                        chatViewSnapshot.data!.get('lastSeen') as Timestamp?;
                   }
                   return StreamBuilder<QuerySnapshot>(
                     stream: FirebaseFirestore.instance
@@ -146,14 +171,17 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                       if (msgSnapshot.hasData && lastSeen != null) {
                         unseenCount = msgSnapshot.data!.docs.where((doc) {
                           final ts = doc['timestamp'] as Timestamp?;
-                          return ts != null && ts.toDate().isAfter(lastSeen!.toDate());
+                          return ts != null &&
+                              ts.toDate().isAfter(lastSeen!.toDate());
                         }).length;
                       } else if (msgSnapshot.hasData && lastSeen == null) {
                         unseenCount = msgSnapshot.data!.docs.length;
                       }
                       return badges.Badge(
                         showBadge: unseenCount > 0,
-                        badgeContent: Text('$unseenCount', style: const TextStyle(color: Colors.white, fontSize: 10)),
+                        badgeContent: Text('$unseenCount',
+                            style: const TextStyle(
+                                color: Colors.white, fontSize: 10)),
                         position: badges.BadgePosition.topEnd(top: -8, end: -8),
                         child: IconButton(
                           icon: const Icon(Icons.chat_bubble_outline),
@@ -176,629 +204,1015 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
               ),
               IconButton(
                 icon: const Icon(Icons.settings),
-                onPressed: () => _showGroupSettings(context, group, isAdmin, userId, groupProvider),
+                onPressed: () => _showGroupSettings(
+                    context, group, isAdmin, userId, groupProvider),
               ),
             ],
           ),
           body: SingleChildScrollView(
-            child: Column(
-              children: [
-                const SizedBox(height: 24),
-                Center(
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      CircleAvatar(
-                        radius: 48,
-                        backgroundImage: group.photoUrl != null
-                            ? NetworkImage(group.photoUrl!)
-                            : null,
-                        child: group.photoUrl == null
-                            ? Text(
-                                groupName.isNotEmpty ? groupName[0].toUpperCase() : '?',
-                                style: const TextStyle(fontSize: 32),
-                              )
-                            : null,
+            child: Center(
+              child: Expanded(
+                child: Column(
+                  children: [
+                    SizedBox(height: screenWidth < 400 ? 12 : 24),
+                    Center(
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          CircleAvatar(
+                            radius: 48,
+                            backgroundImage: group.photoUrl != null
+                                ? NetworkImage(group.photoUrl!)
+                                : null,
+                            child: group.photoUrl == null
+                                ? Text(
+                                    groupName.isNotEmpty
+                                        ? groupName[0].toUpperCase()
+                                        : '?',
+                                    style: const TextStyle(fontSize: 32),
+                                  )
+                                : null,
+                          ),
+                          if (isAdmin)
+                            Positioned(
+                              bottom: 0,
+                              right: 0,
+                              child: GestureDetector(
+                                onTap: null,
+                                child: CircleAvatar(
+                                  radius: 18,
+                                  backgroundColor:
+                                      Theme.of(context).colorScheme.primary,
+                                  child: const Icon(Icons.camera_alt,
+                                      color: Colors.white, size: 20),
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
-                      if (isAdmin)
-                        Positioned(
-                          bottom: 0,
-                          right: 0,
-                          child: GestureDetector(
-                            onTap: null,
-                            child: CircleAvatar(
-                              radius: 18,
-                              backgroundColor: Theme.of(context).colorScheme.primary,
-                              child: const Icon(Icons.camera_alt, color: Colors.white, size: 20),
+                    ),
+                    const SizedBox(height: 8),
+                    if (group.description != null &&
+                        group.description!.isNotEmpty)
+                      Padding(
+                        padding: EdgeInsets.symmetric(
+                            horizontal: horizontalPadding, vertical: 4.0),
+                        child: Card(
+                          color: Theme.of(context).colorScheme.surfaceVariant,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10)),
+                          child: Padding(
+                            padding: const EdgeInsets.all(12.0),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Icon(Icons.info_outline, size: 20),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    group.description!,
+                                    style:
+                                        Theme.of(context).textTheme.bodyMedium,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 8),
-                // Group Members Card
-                Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Card(
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                    color: Theme.of(context).primaryColor.withOpacity(0.1),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                'Group Members',
-                                style: Theme.of(context).textTheme.titleMedium,
-                              ),
-                              if (groupProvider.isUserAdmin(userId, group.members))
+                      ),
+                    if (group.initialAmount != null)
+                      Padding(
+                        padding: EdgeInsets.symmetric(
+                            horizontal: horizontalPadding, vertical: 2.0),
+                        child: Card(
+                          color: Theme.of(context).colorScheme.surfaceVariant,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10)),
+                          child: Padding(
+                            padding: const EdgeInsets.all(12.0),
+                            child: Row(
+                              children: [
+                                const Icon(
+                                    Icons.account_balance_wallet_outlined,
+                                    size: 20),
+                                const SizedBox(width: 8),
                                 Text(
-                                  'Admin',
-                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: Theme.of(context).colorScheme.primary,
-                                    fontWeight: FontWeight.bold,
-                                  ),
+                                  'Initial Amount: ',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodyMedium
+                                      ?.copyWith(fontWeight: FontWeight.bold),
                                 ),
-                            ],
+                                Text(
+                                  group.initialAmount!.toStringAsFixed(2),
+                                  style: Theme.of(context).textTheme.bodyMedium,
+                                ),
+                              ],
+                            ),
                           ),
-                          const SizedBox(height: 8),
-                          Wrap(
-                            spacing: 8.0,
-                            children: groupMembers.map((member) {
-                              final isCurrentUser = member.userId == userId;
-                              final canManage = isAdmin && !isCurrentUser;
-                              return Padding(
-                                padding: const EdgeInsets.only(right: 4.0, bottom: 4.0),
-                                child: GestureDetector(
-                                  onTap: canManage
-                                      ? () async {
-                                          final action = await showMenu<String>(
-                                            context: context,
-                                            position: RelativeRect.fromLTRB(100, 100, 0, 0),
-                                            items: [
-                                              if (!member.isAdmin)
-                                                const PopupMenuItem(
-                                                  value: 'make_admin',
-                                                  child: Text('Make Admin'),
-                                                ),
-                                              if (member.isAdmin)
-                                                const PopupMenuItem(
-                                                  value: 'remove_admin',
-                                                  child: Text('Remove Admin'),
-                                                ),
-                                            ],
-                                          );
-                                          if (action == 'make_admin' || action == 'remove_admin') {
-                                            // Update isAdmin in Firestore
-                                            final updatedMember = GroupMember(
-                                              userId: member.userId,
-                                              username: member.username,
-                                              email: member.email,
-                                              isAdmin: action == 'make_admin',
-                                              joinedAt: member.joinedAt,
-                                            );
-                                            final updatedMembers = groupMembers.map((m) =>
-                                              m.userId == member.userId ? updatedMember.toMap() : m.toMap()
-                                            ).toList();
-                                            await FirebaseFirestore.instance.collection('groups').doc(group.id).update({
-                                              'members': updatedMembers,
-                                            });
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              SnackBar(content: Text(action == 'make_admin' ? 'Promoted to admin.' : 'Admin rights removed.')),
-                                            );
-                                          }
-                                        }
-                                      : null,
-                                  child: Chip(
-                                    label: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Flexible(
-                                          child: Text(
-                                            member.username,
-                                            overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    // Group Members Card
+                    Padding(
+                      padding: EdgeInsets.all(screenWidth < 400 ? 8.0 : 16.0),
+                      child: Card(
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                        color: Theme.of(context).primaryColor.withOpacity(0.1),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    'Group Members',
+                                    style:
+                                        Theme.of(context).textTheme.titleMedium,
+                                  ),
+                                  if (groupProvider.isUserAdmin(
+                                      userId, group.members))
+                                    Text(
+                                      'Admin',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .primary,
+                                            fontWeight: FontWeight.bold,
                                           ),
-                                        ),
-                                        if (member.isAdmin) ...[
-                                          const SizedBox(width: 4),
-                                          Text(
-                                            'Admin',
-                                            style: TextStyle(
-                                              color: Theme.of(context).colorScheme.primary,
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.bold,
+                                    ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Wrap(
+                                spacing: 8.0,
+                                children: groupMembers.map((member) {
+                                  final isCurrentUser = member.userId == userId;
+                                  final canManage = isAdmin && !isCurrentUser;
+                                  return Padding(
+                                    padding: const EdgeInsets.only(
+                                        right: 4.0, bottom: 4.0),
+                                    child: GestureDetector(
+                                      onTap: canManage
+                                          ? () async {
+                                              final action =
+                                                  await showMenu<String>(
+                                                context: context,
+                                                position: RelativeRect.fromLTRB(
+                                                    100, 100, 0, 0),
+                                                items: [
+                                                  if (!member.isAdmin)
+                                                    const PopupMenuItem(
+                                                      value: 'make_admin',
+                                                      child: Text('Make Admin'),
+                                                    ),
+                                                  if (member.isAdmin)
+                                                    const PopupMenuItem(
+                                                      value: 'remove_admin',
+                                                      child:
+                                                          Text('Remove Admin'),
+                                                    ),
+                                                ],
+                                              );
+                                              if (action == 'make_admin' ||
+                                                  action == 'remove_admin') {
+                                                // Update isAdmin in Firestore
+                                                final updatedMember =
+                                                    GroupMember(
+                                                  userId: member.userId,
+                                                  username: member.username,
+                                                  email: member.email,
+                                                  isAdmin:
+                                                      action == 'make_admin',
+                                                  joinedAt: member.joinedAt,
+                                                );
+                                                final updatedMembers =
+                                                    groupMembers
+                                                        .map((m) => m.userId ==
+                                                                member.userId
+                                                            ? updatedMember
+                                                                .toMap()
+                                                            : m.toMap())
+                                                        .toList();
+                                                await FirebaseFirestore.instance
+                                                    .collection('groups')
+                                                    .doc(group.id)
+                                                    .update({
+                                                  'members': updatedMembers,
+                                                });
+                                                ScaffoldMessenger.of(context)
+                                                    .showSnackBar(
+                                                  SnackBar(
+                                                      content: Text(action ==
+                                                              'make_admin'
+                                                          ? 'Promoted to admin.'
+                                                          : 'Admin rights removed.')),
+                                                );
+                                              }
+                                            }
+                                          : null,
+                                      child: Chip(
+                                        label: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Flexible(
+                                              child: Text(
+                                                member.username,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
                                             ),
-                                          ),
-                                        ],
-                                      ],
-                                    ),
-                                    avatar: CircleAvatar(
-                                      child: Text(member.username.substring(0, 1).toUpperCase()),
-                                    ),
-                                    backgroundColor: Theme.of(context).colorScheme.secondary.withOpacity(0.1),
-                                    deleteIcon: groupProvider.isUserAdmin(userId, group.members) && 
-                                              member.userId != userId ? 
-                                              const Icon(Icons.remove_circle_outline) : null,
-                                    onDeleted: groupProvider.isUserAdmin(userId, group.members) && 
-                                              member.userId != userId ?
-                                              () async {
+                                            if (member.isAdmin) ...[
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                'Admin',
+                                                style: TextStyle(
+                                                  color: Theme.of(context)
+                                                      .colorScheme
+                                                      .primary,
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ],
+                                          ],
+                                        ),
+                                        avatar: CircleAvatar(
+                                          child: Text(member.username
+                                              .substring(0, 1)
+                                              .toUpperCase()),
+                                        ),
+                                        backgroundColor: Theme.of(context)
+                                            .colorScheme
+                                            .secondary
+                                            .withOpacity(0.1),
+                                        deleteIcon: groupProvider.isUserAdmin(
+                                                    userId, group.members) &&
+                                                member.userId != userId
+                                            ? const Icon(
+                                                Icons.remove_circle_outline)
+                                            : null,
+                                        onDeleted: groupProvider.isUserAdmin(
+                                                    userId, group.members) &&
+                                                member.userId != userId
+                                            ? () async {
                                                 try {
-                                                  await groupProvider.removeMember(
+                                                  await groupProvider
+                                                      .removeMember(
                                                     groupId: widget.groupId,
                                                     userId: member.userId,
                                                     removedBy: userId,
                                                   );
                                                 } catch (e) {
-                                                  ScaffoldMessenger.of(context).showSnackBar(
-                                                    SnackBar(content: Text(e.toString())),
+                                                  ScaffoldMessenger.of(context)
+                                                      .showSnackBar(
+                                                    SnackBar(
+                                                        content:
+                                                            Text(e.toString())),
                                                   );
                                                 }
-                                              } : null,
-                                  ),
-                                ),
-                              );
-                            }).toList(),
+                                              }
+                                            : null,
+                                      ),
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                            ],
                           ),
-                        ],
+                        ),
                       ),
                     ),
-                  ),
-                ),
-                // Group Summary Table (no graph)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                  child: StreamBuilder<QuerySnapshot>(
-                    stream: FirebaseFirestore.instance
-                        .collection('groups')
-                        .doc(widget.groupId)
-                        .collection('expenses')
-                        .snapshots(),
-                    builder: (context, snapshot) {
-                      if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                        return const Center(child: Text('No expenses yet.'));
-                      }
-                      final expenses = snapshot.data!.docs;
-                      final sortedMembers = [...groupMembers]..sort((a, b) => a.username.compareTo(b.username));
-                      final Map<String, double> paidMap = {for (var m in sortedMembers) m.userId: 0.0};
-                      final Map<String, double> owedMap = {for (var m in sortedMembers) m.userId: 0.0};
-
-                      for (var doc in expenses) {
-                        final data = doc.data() as Map<String, dynamic>;
-                        final amount = (data['amount'] as num?)?.toDouble() ?? 0.0;
-                        final paidBy = data['paidBy'] as String?;
-                        final splitType = data['splitType'] ?? 'equal';
-
-                        // Add to Paid
-                        if (paidBy != null && paidMap.containsKey(paidBy)) {
-                          paidMap[paidBy] = paidMap[paidBy]! + amount;
-                        }
-
-                        // Calculate Owes
-                        if (splitType == 'custom' && data['splitData'] is Map) {
-                          final splitData = data['splitData'] as Map<String, dynamic>;
-                          splitData.forEach((uid, share) {
-                            if (owedMap.containsKey(uid)) {
-                              owedMap[uid] = owedMap[uid]! + (share is num ? share.toDouble() : 0.0);
+                    // Group Summary Table (no graph)
+                    Padding(
+                      padding: EdgeInsets.symmetric(
+                          horizontal: horizontalPadding, vertical: 8.0),
+                      child: StreamBuilder<QuerySnapshot>(
+                        stream: FirebaseFirestore.instance
+                            .collection('groups')
+                            .doc(widget.groupId)
+                            .collection('expenses')
+                            .snapshots(),
+                        builder: (context, snapshot) {
+                          if (!snapshot.hasData ||
+                              snapshot.data!.docs.isEmpty) {
+                            // Even if there are no expenses, we still want to show the initial amount if present
+                            final sortedMembers = [
+                              ...groupMembers
+                            ]..sort((a, b) => a.username.compareTo(b.username));
+                            final Map<String, double> paidMap = {
+                              for (var m in sortedMembers) m.userId: 0.0
+                            };
+                            final Map<String, double> owedMap = {
+                              for (var m in sortedMembers) m.userId: 0.0
+                            };
+                            if (group.initialAmount != null &&
+                                group.initialAmount! > 0 &&
+                                group.memberIds.isNotEmpty) {
+                              final double perUser =
+                                  group.initialAmount! / group.memberIds.length;
+                              // Add to Paid (creator)
+                              if (paidMap.containsKey(group.createdBy)) {
+                                paidMap[group.createdBy] =
+                                    paidMap[group.createdBy]! +
+                                        group.initialAmount!;
+                              }
+                              // Add to Owes (all members)
+                              for (var m in sortedMembers) {
+                                owedMap[m.userId] =
+                                    owedMap[m.userId]! + perUser;
+                              }
                             }
-                          });
-                        } else if (splitType == 'equal' && data['splitAmong'] is List) {
-                          final splitAmong = List<String>.from(data['splitAmong'] ?? []);
-                          final perUser = splitAmong.isNotEmpty ? amount / splitAmong.length : 0.0;
-                          for (var uid in splitAmong) {
-                            if (owedMap.containsKey(uid)) {
-                              owedMap[uid] = owedMap[uid]! + perUser;
-                            }
-                          }
-                        } else {
-                          // Fallback: split among all members
-                          final perUser = sortedMembers.isNotEmpty ? amount / sortedMembers.length : 0.0;
-                          for (var m in sortedMembers) {
-                            owedMap[m.userId] = owedMap[m.userId]! + perUser;
-                          }
-                        }
-                      }
-                      final Map<String, double> netMap = {
-                        for (var m in sortedMembers) m.userId: (paidMap[m.userId] ?? 0) - (owedMap[m.userId] ?? 0)
-                      };
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Group Summary Table', style: Theme.of(context).textTheme.titleMedium),
-                          const SizedBox(height: 8),
-                          DataTable(
-                            columns: const [
-                              DataColumn(label: Text('Member')),
-                              DataColumn(label: Text('Paid')),
-                              DataColumn(label: Text('Owes')),
-                              DataColumn(label: Text('Net')),
-                            ],
-                            rows: [
+                            final Map<String, double> netMap = {
                               for (var m in sortedMembers)
-                                DataRow(cells: [
-                                  DataCell(Text(m.username)),
-                                  DataCell(Text(paidMap[m.userId]!.toStringAsFixed(2))),
-                                  DataCell(Text(owedMap[m.userId]!.toStringAsFixed(2))),
-                                  DataCell(Text(netMap[m.userId]!.toStringAsFixed(2), style: TextStyle(color: (netMap[m.userId]! > 0) ? Colors.green : (netMap[m.userId]! < 0) ? Colors.red : Colors.grey))),
-                                ]),
-                            ],
-                          ),
-                        ],
-                      );
-                    },
-                  ),
-                ),
-                // Expenses History Section
-                Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      'Expenses History',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                  ),
-                ),
-                SizedBox(
-                  height: 300,
-                  child: StreamBuilder<QuerySnapshot>(
-                    stream: FirebaseFirestore.instance
-                        .collection('groups')
-                        .doc(widget.groupId)
-                        .collection('expenses')
-                        .orderBy('timestamp', descending: true)
-                        .snapshots(),
-                    builder: (context, expenseSnapshot) {
-                      if (expenseSnapshot.hasError) {
-                        return Center(
-                            child: Text('Error: ${expenseSnapshot.error}'));
-                      }
-
-                      if (expenseSnapshot.connectionState ==
-                          ConnectionState.waiting) {
-                        return const Center(child: CircularProgressIndicator());
-                      }
-
-                      if (!expenseSnapshot.hasData ||
-                          expenseSnapshot.data!.docs.isEmpty) {
-                        return Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.money_off, size: 80, color: Colors.grey),
-                              const SizedBox(height: 16),
-                              Text(
-                                'No expenses yet.',
-                                style: Theme.of(context).textTheme.titleMedium,
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'Add your first expense to track spending in this group!',
-                                style: Theme.of(context).textTheme.bodyMedium,
-                                textAlign: TextAlign.center,
-                              ),
-                            ],
-                          ),
-                        );
-                      }
-
-                      return ListView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                        itemCount: expenseSnapshot.data!.docs.length,
-                        itemBuilder: (context, index) {
-                          var expense = expenseSnapshot.data!.docs[index];
-                          var expenseData =
-                              expense.data() as Map<String, dynamic>;
-
-                          String description =
-                              expenseData['description']?.toString() ?? 'No Description';
-                          double amount = 0.0;
-                          if (expenseData['amount'] != null) {
-                            final rawAmount = expenseData['amount'];
-                            amount = rawAmount is num ? rawAmount.toDouble() : 0.0;
-                          }
-                          String paidByUserId = expenseData['paidBy']?.toString() ?? '';
-                          Timestamp timestamp =
-                              expenseData['timestamp'] as Timestamp? ?? Timestamp.fromDate(DateTime.now());
-
-                          String splitType = expenseData['splitType']?.toString() ?? 'equal';
-                          dynamic splitData;
-                          if (splitType == 'custom') {
-                            final rawData = expenseData['splitData'] as Map<String, dynamic>?;
-                            if (rawData != null) {
-                              splitData = rawData.map(
-                                (k, v) {
-                                  if (v == null) return MapEntry(k, 0.0);
-                                  return MapEntry(k, (v is num ? v.toDouble() : 0.0));
-                                }
-                              );
-                            }
-                          } else {
-                            splitData = (expenseData['splitData'] as List<dynamic>?)?.map((e) => e.toString()).toList();
-                          }
-
-                          return FutureBuilder<DocumentSnapshot>(
-                            future: FirebaseFirestore.instance
-                                .collection('users')
-                                .doc(paidByUserId)
-                                .get(),
-                            builder: (context, userSnapshot) {
-                              String paidByUsername = 'Unknown User';
-                              if (userSnapshot.hasData && userSnapshot.data!.exists) {
-                                paidByUsername = userSnapshot.data!['username'] ?? userSnapshot.data!['email'] ?? 'Unknown User';
-                              }
-
-                              String splitInfo = 'Equal Split';
-                              if (splitType == 'custom') {
-                                splitInfo = 'Custom Split';
-                              }
-
-                              return Card(
-                                margin: const EdgeInsets.only(bottom: 10.0),
-                                elevation: 1,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
+                                m.userId: (paidMap[m.userId] ?? 0) -
+                                    (owedMap[m.userId] ?? 0)
+                            };
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Group Summary Table',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium),
+                                if (group.initialAmount != null &&
+                                    group.initialAmount! > 0)
+                                  Padding(
+                                    padding: const EdgeInsets.only(bottom: 4.0),
+                                    child: Text(
+                                      'Initial amount of ${group.initialAmount!.toStringAsFixed(2)} is included as an equal split among all members.',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(color: Colors.blueGrey),
+                                    ),
+                                  ),
+                                const SizedBox(height: 8),
+                                SingleChildScrollView(
+                                  scrollDirection: Axis.horizontal,
+                                  child: DataTable(
+                                    columns: const [
+                                      DataColumn(label: Text('Member')),
+                                      DataColumn(label: Text('Paid')),
+                                      DataColumn(label: Text('Owes')),
+                                      DataColumn(label: Text('Net')),
+                                    ],
+                                    rows: [
+                                      for (var m in sortedMembers)
+                                        DataRow(cells: [
+                                          DataCell(Text(m.username)),
+                                          DataCell(Text(paidMap[m.userId]!
+                                              .toStringAsFixed(2))),
+                                          DataCell(Text(owedMap[m.userId]!
+                                              .toStringAsFixed(2))),
+                                          DataCell(Text(
+                                              netMap[m.userId]!
+                                                  .toStringAsFixed(2),
+                                              style: TextStyle(
+                                                  color: (netMap[m.userId]! > 0)
+                                                      ? Colors.green
+                                                      : (netMap[m.userId]! < 0)
+                                                          ? Colors.red
+                                                          : Colors.grey))),
+                                        ]),
+                                    ],
+                                  ),
                                 ),
-                                child: splitType == 'custom'
-                                    ? ExpansionTile(
-                                        title: Text(description),
-                                        subtitle: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text('Paid by: $paidByUsername'),
-                                            const SizedBox(height: 4),
-                                            Text(
-                                              'Date: ${timestamp.toDate().toLocal().day}/${timestamp.toDate().toLocal().month}/${timestamp.toDate().toLocal().year}',
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .bodySmall,
-                                            ),
-                                            if (expenseData['notes'] != null &&
-                                                expenseData['notes'].isNotEmpty)
-                                              Padding(
-                                                padding: const EdgeInsets.only(
-                                                    top: 4.0),
-                                                child: Text(
-                                                  'Notes: ${expenseData['notes']}',
-                                                  style: Theme.of(context)
-                                                      .textTheme
-                                                      .bodySmall,
-                                                ),
-                                              ),
-                                            const SizedBox(height: 4),
-                                            Text(
-                                              'Split: $splitInfo',
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .bodySmall,
-                                            ),
-                                          ],
-                                        ),
-                                        trailing: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Text(
-                                              '\$' + amount.toStringAsFixed(2),
-                                              style: Theme.of(context).textTheme.titleMedium,
-                                            ),
-                                            if (isAdmin)
-                                              IconButton(
-                                                icon: Icon(Icons.edit, color: Theme.of(context).colorScheme.primary),
-                                                tooltip: 'Edit Expense',
-                                                onPressed: () {
-                                                  Navigator.pushNamed(context, '/edit-expense', arguments: {
-                                                    'groupId': widget.groupId,
-                                                    'expenseId': expense.id,
-                                                  });
-                                                },
-                                              ),
-                                            if (isAdmin)
-                                              IconButton(
-                                                icon: Icon(Icons.delete, color: Colors.red),
-                                                tooltip: 'Delete Expense',
-                                                onPressed: () async {
-                                                  final confirm = await showDialog<bool>(
-                                                    context: context,
-                                                    builder: (context) => AlertDialog(
-                                                      title: const Text('Delete Expense'),
-                                                      content: const Text('Are you sure you want to delete this expense?'),
-                                                      actions: [
-                                                        TextButton(
-                                                          onPressed: () => Navigator.pop(context, false),
-                                                          child: const Text('Cancel'),
-                                                        ),
-                                                        TextButton(
-                                                          onPressed: () => Navigator.pop(context, true),
-                                                          child: const Text('Delete', style: TextStyle(color: Colors.red)),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  );
-                                                  if (confirm == true) {
-                                                    await FirebaseFirestore.instance
-                                                        .collection('groups')
-                                                        .doc(widget.groupId)
-                                                        .collection('expenses')
-                                                        .doc(expense.id)
-                                                        .delete();
-                                                    ScaffoldMessenger.of(context).showSnackBar(
-                                                      const SnackBar(content: Text('Expense deleted.')),
-                                                    );
-                                                  }
-                                                },
-                                              ),
-                                          ],
-                                        ),
-                                        children: [
-                                          Padding(
-                                            padding: const EdgeInsets.symmetric(
-                                                horizontal: 16.0, vertical: 8.0),
-                                            child: Column(
+                              ],
+                            );
+                          }
+                          final expenses = snapshot.data!.docs;
+                          final sortedMembers = [...groupMembers]
+                            ..sort((a, b) => a.username.compareTo(b.username));
+                          final Map<String, double> paidMap = {
+                            for (var m in sortedMembers) m.userId: 0.0
+                          };
+                          final Map<String, double> owedMap = {
+                            for (var m in sortedMembers) m.userId: 0.0
+                          };
+
+                          // --- Add initial amount as a virtual expense ---
+                          if (group.initialAmount != null &&
+                              group.initialAmount! > 0 &&
+                              group.memberIds.isNotEmpty) {
+                            final double perUser =
+                                group.initialAmount! / group.memberIds.length;
+                            // Add to Paid (creator)
+                            if (paidMap.containsKey(group.createdBy)) {
+                              paidMap[group.createdBy] =
+                                  paidMap[group.createdBy]! +
+                                      group.initialAmount!;
+                            }
+                            // Add to Owes (all members)
+                            for (var m in sortedMembers) {
+                              owedMap[m.userId] = owedMap[m.userId]! + perUser;
+                            }
+                          }
+                          // --- End virtual expense ---
+
+                          for (var doc in expenses) {
+                            final data = doc.data() as Map<String, dynamic>;
+                            final amount =
+                                (data['amount'] as num?)?.toDouble() ?? 0.0;
+                            final paidBy = data['paidBy'] as String?;
+                            final splitType = data['splitType'] ?? 'equal';
+
+                            // Add to Paid
+                            if (paidBy != null && paidMap.containsKey(paidBy)) {
+                              paidMap[paidBy] = paidMap[paidBy]! + amount;
+                            }
+
+                            // Calculate Owes
+                            if (splitType == 'custom' &&
+                                data['splitData'] is Map) {
+                              final splitData =
+                                  data['splitData'] as Map<String, dynamic>;
+                              splitData.forEach((uid, share) {
+                                if (owedMap.containsKey(uid)) {
+                                  owedMap[uid] = owedMap[uid]! +
+                                      (share is num ? share.toDouble() : 0.0);
+                                }
+                              });
+                            } else if (splitType == 'equal' &&
+                                data['splitAmong'] is List) {
+                              final splitAmong =
+                                  List<String>.from(data['splitAmong'] ?? []);
+                              final perUser = splitAmong.isNotEmpty
+                                  ? amount / splitAmong.length
+                                  : 0.0;
+                              for (var uid in splitAmong) {
+                                if (owedMap.containsKey(uid)) {
+                                  owedMap[uid] = owedMap[uid]! + perUser;
+                                }
+                              }
+                            } else {
+                              // Fallback: split among all members
+                              final perUser = sortedMembers.isNotEmpty
+                                  ? amount / sortedMembers.length
+                                  : 0.0;
+                              for (var m in sortedMembers) {
+                                owedMap[m.userId] =
+                                    owedMap[m.userId]! + perUser;
+                              }
+                            }
+                          }
+                          final Map<String, double> netMap = {
+                            for (var m in sortedMembers)
+                              m.userId: (paidMap[m.userId] ?? 0) -
+                                  (owedMap[m.userId] ?? 0)
+                          };
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Group Summary Table',
+                                  style:
+                                      Theme.of(context).textTheme.titleMedium),
+                              if (group.initialAmount != null &&
+                                  group.initialAmount! > 0)
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 4.0),
+                                  child: Text(
+                                    'Initial amount of ${group.initialAmount!.toStringAsFixed(2)} is included as an equal split among all members.',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodySmall
+                                        ?.copyWith(color: Colors.blueGrey),
+                                  ),
+                                ),
+                              const SizedBox(height: 8),
+                              SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: DataTable(
+                                  columns: const [
+                                    DataColumn(label: Text('Member')),
+                                    DataColumn(label: Text('Paid')),
+                                    DataColumn(label: Text('Owes')),
+                                    DataColumn(label: Text('Net')),
+                                  ],
+                                  rows: [
+                                    for (var m in sortedMembers)
+                                      DataRow(cells: [
+                                        DataCell(Text(m.username)),
+                                        DataCell(Text(paidMap[m.userId]!
+                                            .toStringAsFixed(2))),
+                                        DataCell(Text(owedMap[m.userId]!
+                                            .toStringAsFixed(2))),
+                                        DataCell(Text(
+                                            netMap[m.userId]!
+                                                .toStringAsFixed(2),
+                                            style: TextStyle(
+                                                color: (netMap[m.userId]! > 0)
+                                                    ? Colors.green
+                                                    : (netMap[m.userId]! < 0)
+                                                        ? Colors.red
+                                                        : Colors.grey))),
+                                      ]),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                    ),
+                    // Expenses History Section
+                    Padding(
+                      padding: EdgeInsets.symmetric(
+                          horizontal: horizontalPadding, vertical: 8.0),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'Expenses History',
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                      ),
+                    ),
+                    SizedBox(
+                      height: screenWidth < 400 ? 220 : 300,
+                      child: StreamBuilder<QuerySnapshot>(
+                        stream: FirebaseFirestore.instance
+                            .collection('groups')
+                            .doc(widget.groupId)
+                            .collection('expenses')
+                            .orderBy('timestamp', descending: true)
+                            .snapshots(),
+                        builder: (context, expenseSnapshot) {
+                          if (expenseSnapshot.hasError) {
+                            return Center(
+                                child: Text('Error: {expenseSnapshot.error}'));
+                          }
+
+                          if (expenseSnapshot.connectionState ==
+                              ConnectionState.waiting) {
+                            return const Center(
+                                child: CircularProgressIndicator());
+                          }
+
+                          if (!expenseSnapshot.hasData ||
+                              expenseSnapshot.data!.docs.isEmpty) {
+                            return Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.money_off,
+                                      size: 80, color: Colors.grey),
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    'No expenses yet.',
+                                    style:
+                                        Theme.of(context).textTheme.titleMedium,
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Add your first expense to track spending in this group!',
+                                    style:
+                                        Theme.of(context).textTheme.bodyMedium,
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ],
+                              ),
+                            );
+                          }
+
+                          return ListView.builder(
+                            padding: EdgeInsets.symmetric(
+                                horizontal: horizontalPadding),
+                            itemCount: expenseSnapshot.data!.docs.length,
+                            itemBuilder: (context, index) {
+                              var expense = expenseSnapshot.data!.docs[index];
+                              var expenseData =
+                                  expense.data() as Map<String, dynamic>;
+
+                              String description =
+                                  expenseData['description']?.toString() ??
+                                      'No Description';
+                              double amount = 0.0;
+                              if (expenseData['amount'] != null) {
+                                final rawAmount = expenseData['amount'];
+                                amount = rawAmount is num
+                                    ? rawAmount.toDouble()
+                                    : 0.0;
+                              }
+                              String paidByUserId =
+                                  expenseData['paidBy']?.toString() ?? '';
+                              Timestamp timestamp =
+                                  expenseData['timestamp'] as Timestamp? ??
+                                      Timestamp.fromDate(DateTime.now());
+
+                              String splitType =
+                                  expenseData['splitType']?.toString() ??
+                                      'equal';
+                              dynamic splitData;
+                              if (splitType == 'custom') {
+                                final rawData = expenseData['splitData']
+                                    as Map<String, dynamic>?;
+                                if (rawData != null) {
+                                  splitData = rawData.map((k, v) {
+                                    if (v == null) return MapEntry(k, 0.0);
+                                    return MapEntry(
+                                        k, (v is num ? v.toDouble() : 0.0));
+                                  });
+                                }
+                              } else {
+                                splitData =
+                                    (expenseData['splitData'] as List<dynamic>?)
+                                        ?.map((e) => e.toString())
+                                        .toList();
+                              }
+
+                              return FutureBuilder<DocumentSnapshot>(
+                                future: FirebaseFirestore.instance
+                                    .collection('users')
+                                    .doc(paidByUserId)
+                                    .get(),
+                                builder: (context, userSnapshot) {
+                                  String paidByUsername = 'Unknown User';
+                                  if (userSnapshot.hasData &&
+                                      userSnapshot.data!.exists) {
+                                    paidByUsername =
+                                        userSnapshot.data!['username'] ??
+                                            userSnapshot.data!['email'] ??
+                                            'Unknown User';
+                                  }
+
+                                  String splitInfo = 'Equal Split';
+                                  if (splitType == 'custom') {
+                                    splitInfo = 'Custom Split';
+                                  }
+
+                                  return Card(
+                                    margin: const EdgeInsets.only(bottom: 10.0),
+                                    elevation: 1,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: splitType == 'custom'
+                                        ? ExpansionTile(
+                                            title: Text(description),
+                                            subtitle: Column(
                                               crossAxisAlignment:
                                                   CrossAxisAlignment.start,
                                               children: [
                                                 Text(
-                                                  'Custom Split Details:',
-                                                  style: Theme.of(context)
-                                                      .textTheme
-                                                      .bodyMedium
-                                                      ?.copyWith(
-                                                          fontWeight:
-                                                              FontWeight.bold),
-                                                ),
-                                                const SizedBox(height: 8),
-                                                ...splitData.entries.map<Widget>((entry) {
-                                                  final memberName = group.members
-                                                      .firstWhere((m) =>
-                                                          m.userId == entry.key,
-                                                          orElse: () => GroupMember(
-                                                              userId: entry.key,
-                                                              username: 'Unknown',
-                                                              email: 'unknown@example.com',
-                                                              isAdmin: false,
-                                                              joinedAt: DateTime.now()))
-                                                      .username;
-                                                  return Padding(
-                                                    padding: const EdgeInsets.symmetric(
-                                                        vertical: 2.0),
-                                                    child: Row(
-                                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                                      children: [
-                                                        Flexible(
-                                                          child: Text(
-                                                            memberName,
-                                                            overflow: TextOverflow.ellipsis,
-                                                          ),
-                                                        ),
-                                                        Text('\$${(entry.value as double).toStringAsFixed(2)}'),
-                                                      ],
-                                                    ),
-                                                  );
-                                                }).toList(),
-                                              ],
-                                            ),
-                                          ),
-                                        ],
-                                      )
-                                    : ListTile(
-                                        title: Text(description),
-                                        subtitle: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text('Paid by: $paidByUsername'),
-                                            const SizedBox(height: 4),
-                                            Text(
-                                              'Date: ${timestamp.toDate().toLocal().day}/${timestamp.toDate().toLocal().month}/${timestamp.toDate().toLocal().year}',
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .bodySmall,
-                                            ),
-                                            if (expenseData['notes'] != null &&
-                                                expenseData['notes'].isNotEmpty)
-                                              Padding(
-                                                padding: const EdgeInsets.only(
-                                                    top: 4.0),
-                                                child: Text(
-                                                  'Notes: ${expenseData['notes']}',
+                                                    'Paid by: $paidByUsername'),
+                                                const SizedBox(height: 4),
+                                                Text(
+                                                  'Date: ${timestamp.toDate().toLocal().day}/${timestamp.toDate().toLocal().month}/${timestamp.toDate().toLocal().year}',
                                                   style: Theme.of(context)
                                                       .textTheme
                                                       .bodySmall,
                                                 ),
-                                              ),
-                                            const SizedBox(height: 4),
-                                            Text(
-                                              'Split: $splitInfo',
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .bodySmall,
-                                            ),
-                                          ],
-                                        ),
-                                        trailing: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Text(
-                                              '\$' + amount.toStringAsFixed(2),
-                                              style: Theme.of(context).textTheme.titleMedium,
-                                            ),
-                                            if (isAdmin)
-                                              IconButton(
-                                                icon: Icon(Icons.edit, color: Theme.of(context).colorScheme.primary),
-                                                tooltip: 'Edit Expense',
-                                                onPressed: () {
-                                                  Navigator.pushNamed(context, '/edit-expense', arguments: {
-                                                    'groupId': widget.groupId,
-                                                    'expenseId': expense.id,
-                                                  });
-                                                },
-                                              ),
-                                            if (isAdmin)
-                                              IconButton(
-                                                icon: Icon(Icons.delete, color: Colors.red),
-                                                tooltip: 'Delete Expense',
-                                                onPressed: () async {
-                                                  final confirm = await showDialog<bool>(
-                                                    context: context,
-                                                    builder: (context) => AlertDialog(
-                                                      title: const Text('Delete Expense'),
-                                                      content: const Text('Are you sure you want to delete this expense?'),
-                                                      actions: [
-                                                        TextButton(
-                                                          onPressed: () => Navigator.pop(context, false),
-                                                          child: const Text('Cancel'),
-                                                        ),
-                                                        TextButton(
-                                                          onPressed: () => Navigator.pop(context, true),
-                                                          child: const Text('Delete', style: TextStyle(color: Colors.red)),
-                                                        ),
-                                                      ],
+                                                if (expenseData['notes'] !=
+                                                        null &&
+                                                    expenseData['notes']
+                                                        .isNotEmpty)
+                                                  Padding(
+                                                    padding:
+                                                        const EdgeInsets.only(
+                                                            top: 4.0),
+                                                    child: Text(
+                                                      'Notes: ${expenseData['notes']}',
+                                                      style: Theme.of(context)
+                                                          .textTheme
+                                                          .bodySmall,
                                                     ),
-                                                  );
-                                                  if (confirm == true) {
-                                                    await FirebaseFirestore.instance
-                                                        .collection('groups')
-                                                        .doc(widget.groupId)
-                                                        .collection('expenses')
-                                                        .doc(expense.id)
-                                                        .delete();
-                                                    ScaffoldMessenger.of(context).showSnackBar(
-                                                      const SnackBar(content: Text('Expense deleted.')),
-                                                    );
-                                                  }
-                                                },
+                                                  ),
+                                                const SizedBox(height: 4),
+                                                Text(
+                                                  'Split: $splitInfo',
+                                                  style: Theme.of(context)
+                                                      .textTheme
+                                                      .bodySmall,
+                                                ),
+                                              ],
+                                            ),
+                                            trailing: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Text(
+                                                  '\$' +
+                                                      amount.toStringAsFixed(2),
+                                                  style: Theme.of(context)
+                                                      .textTheme
+                                                      .titleMedium,
+                                                ),
+                                                if (isAdmin)
+                                                  IconButton(
+                                                    icon: Icon(Icons.edit,
+                                                        color: Theme.of(context)
+                                                            .colorScheme
+                                                            .primary),
+                                                    tooltip: 'Edit Expense',
+                                                    onPressed: () {
+                                                      Navigator.pushNamed(
+                                                          context,
+                                                          '/edit-expense',
+                                                          arguments: {
+                                                            'groupId':
+                                                                widget.groupId,
+                                                            'expenseId':
+                                                                expense.id,
+                                                          });
+                                                    },
+                                                  ),
+                                                if (isAdmin)
+                                                  IconButton(
+                                                    icon: Icon(Icons.delete,
+                                                        color: Colors.red),
+                                                    tooltip: 'Delete Expense',
+                                                    onPressed: () async {
+                                                      final confirm =
+                                                          await showDialog<
+                                                              bool>(
+                                                        context: context,
+                                                        builder: (context) =>
+                                                            AlertDialog(
+                                                          title: const Text(
+                                                              'Delete Expense'),
+                                                          content: const Text(
+                                                              'Are you sure you want to delete this expense?'),
+                                                          actions: [
+                                                            TextButton(
+                                                              onPressed: () =>
+                                                                  Navigator.pop(
+                                                                      context,
+                                                                      false),
+                                                              child: const Text(
+                                                                  'Cancel'),
+                                                            ),
+                                                            TextButton(
+                                                              onPressed: () =>
+                                                                  Navigator.pop(
+                                                                      context,
+                                                                      true),
+                                                              child: const Text(
+                                                                  'Delete',
+                                                                  style: TextStyle(
+                                                                      color: Colors
+                                                                          .red)),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      );
+                                                      if (confirm == true) {
+                                                        await FirebaseFirestore
+                                                            .instance
+                                                            .collection(
+                                                                'groups')
+                                                            .doc(widget.groupId)
+                                                            .collection(
+                                                                'expenses')
+                                                            .doc(expense.id)
+                                                            .delete();
+                                                        ScaffoldMessenger.of(
+                                                                context)
+                                                            .showSnackBar(
+                                                          const SnackBar(
+                                                              content: Text(
+                                                                  'Expense deleted.')),
+                                                        );
+                                                      }
+                                                    },
+                                                  ),
+                                              ],
+                                            ),
+                                            children: [
+                                              Padding(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                        horizontal: 16.0,
+                                                        vertical: 8.0),
+                                                child: Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(
+                                                      'Custom Split Details:',
+                                                      style: Theme.of(context)
+                                                          .textTheme
+                                                          .bodyMedium
+                                                          ?.copyWith(
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .bold),
+                                                    ),
+                                                    const SizedBox(height: 8),
+                                                    ...splitData.entries
+                                                        .map<Widget>((entry) {
+                                                      final memberName = group
+                                                          .members
+                                                          .firstWhere(
+                                                              (m) =>
+                                                                  m.userId ==
+                                                                  entry.key,
+                                                              orElse: () => GroupMember(
+                                                                  userId:
+                                                                      entry.key,
+                                                                  username:
+                                                                      'Unknown',
+                                                                  email:
+                                                                      'unknown@example.com',
+                                                                  isAdmin:
+                                                                      false,
+                                                                  joinedAt:
+                                                                      DateTime
+                                                                          .now()))
+                                                          .username;
+                                                      return Padding(
+                                                        padding:
+                                                            const EdgeInsets
+                                                                .symmetric(
+                                                                vertical: 2.0),
+                                                        child: Row(
+                                                          mainAxisAlignment:
+                                                              MainAxisAlignment
+                                                                  .spaceBetween,
+                                                          children: [
+                                                            Flexible(
+                                                              child: Text(
+                                                                memberName,
+                                                                overflow:
+                                                                    TextOverflow
+                                                                        .ellipsis,
+                                                              ),
+                                                            ),
+                                                            Text(
+                                                                '\$${(entry.value as double).toStringAsFixed(2)}'),
+                                                          ],
+                                                        ),
+                                                      );
+                                                    }).toList(),
+                                                  ],
+                                                ),
                                               ),
-                                          ],
-                                        ),
-                                        onTap: () {
-                                          if (isAdmin) {
-                                            Navigator.pushNamed(context, '/edit-expense', arguments: {
-                                              'groupId': widget.groupId,
-                                              'expenseId': expense.id,
-                                            });
-                                          } else {
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              SnackBar(content: Text('Only group admins can edit expenses.')),
-                                            );
-                                          }
-                                        },
-                                      ),
+                                            ],
+                                          )
+                                        : ListTile(
+                                            title: Text(description),
+                                            subtitle: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                    'Paid by: $paidByUsername'),
+                                                const SizedBox(height: 4),
+                                                Text(
+                                                  'Date: ${timestamp.toDate().toLocal().day}/${timestamp.toDate().toLocal().month}/${timestamp.toDate().toLocal().year}',
+                                                  style: Theme.of(context)
+                                                      .textTheme
+                                                      .bodySmall,
+                                                ),
+                                                if (expenseData['notes'] !=
+                                                        null &&
+                                                    expenseData['notes']
+                                                        .isNotEmpty)
+                                                  Padding(
+                                                    padding:
+                                                        const EdgeInsets.only(
+                                                            top: 4.0),
+                                                    child: Text(
+                                                      'Notes: ${expenseData['notes']}',
+                                                      style: Theme.of(context)
+                                                          .textTheme
+                                                          .bodySmall,
+                                                    ),
+                                                  ),
+                                                const SizedBox(height: 4),
+                                                Text(
+                                                  'Split: $splitInfo',
+                                                  style: Theme.of(context)
+                                                      .textTheme
+                                                      .bodySmall,
+                                                ),
+                                              ],
+                                            ),
+                                            trailing: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Text(
+                                                  '\$' +
+                                                      amount.toStringAsFixed(2),
+                                                  style: Theme.of(context)
+                                                      .textTheme
+                                                      .titleMedium,
+                                                ),
+                                                if (isAdmin)
+                                                  IconButton(
+                                                    icon: Icon(Icons.edit,
+                                                        color: Theme.of(context)
+                                                            .colorScheme
+                                                            .primary),
+                                                    tooltip: 'Edit Expense',
+                                                    onPressed: () {
+                                                      Navigator.pushNamed(
+                                                          context,
+                                                          '/edit-expense',
+                                                          arguments: {
+                                                            'groupId':
+                                                                widget.groupId,
+                                                            'expenseId':
+                                                                expense.id,
+                                                          });
+                                                    },
+                                                  ),
+                                                if (isAdmin)
+                                                  IconButton(
+                                                    icon: Icon(Icons.delete,
+                                                        color: Colors.red),
+                                                    tooltip: 'Delete Expense',
+                                                    onPressed: () async {
+                                                      final confirm =
+                                                          await showDialog<
+                                                              bool>(
+                                                        context: context,
+                                                        builder: (context) =>
+                                                            AlertDialog(
+                                                          title: const Text(
+                                                              'Delete Expense'),
+                                                          content: const Text(
+                                                              'Are you sure you want to delete this expense?'),
+                                                          actions: [
+                                                            TextButton(
+                                                              onPressed: () =>
+                                                                  Navigator.pop(
+                                                                      context,
+                                                                      false),
+                                                              child: const Text(
+                                                                  'Cancel'),
+                                                            ),
+                                                            TextButton(
+                                                              onPressed: () =>
+                                                                  Navigator.pop(
+                                                                      context,
+                                                                      true),
+                                                              child: const Text(
+                                                                  'Delete',
+                                                                  style: TextStyle(
+                                                                      color: Colors
+                                                                          .red)),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      );
+                                                      if (confirm == true) {
+                                                        await FirebaseFirestore
+                                                            .instance
+                                                            .collection(
+                                                                'groups')
+                                                            .doc(widget.groupId)
+                                                            .collection(
+                                                                'expenses')
+                                                            .doc(expense.id)
+                                                            .delete();
+                                                        ScaffoldMessenger.of(
+                                                                context)
+                                                            .showSnackBar(
+                                                          const SnackBar(
+                                                              content: Text(
+                                                                  'Expense deleted.')),
+                                                        );
+                                                      }
+                                                    },
+                                                  ),
+                                              ],
+                                            ),
+                                            onTap: () {
+                                              if (isAdmin) {
+                                                Navigator.pushNamed(
+                                                    context, '/edit-expense',
+                                                    arguments: {
+                                                      'groupId': widget.groupId,
+                                                      'expenseId': expense.id,
+                                                    });
+                                              } else {
+                                                ScaffoldMessenger.of(context)
+                                                    .showSnackBar(
+                                                  SnackBar(
+                                                      content: Text(
+                                                          'Only group admins can edit expenses.')),
+                                                );
+                                              }
+                                            },
+                                          ),
+                                  );
+                                },
                               );
                             },
                           );
                         },
-                      );
-                    },
-                  ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
           floatingActionButton: FloatingActionButton.extended(
@@ -817,7 +1231,8 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
     );
   }
 
-  void _showGroupSettings(BuildContext context, GroupModel group, bool isAdmin, String userId, GroupProvider groupProvider) {
+  void _showGroupSettings(BuildContext context, GroupModel group, bool isAdmin,
+      String userId, GroupProvider groupProvider) {
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -837,12 +1252,14 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                     final newName = await showDialog<String>(
                       context: context,
                       builder: (context) {
-                        final controller = TextEditingController(text: group.name);
+                        final controller =
+                            TextEditingController(text: group.name);
                         return AlertDialog(
                           title: const Text('Rename Group'),
                           content: TextField(
                             controller: controller,
-                            decoration: const InputDecoration(labelText: 'New group name'),
+                            decoration: const InputDecoration(
+                                labelText: 'New group name'),
                           ),
                           actions: [
                             TextButton(
@@ -850,16 +1267,23 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                               child: const Text('Cancel'),
                             ),
                             TextButton(
-                              onPressed: () => Navigator.pop(context, controller.text.trim()),
+                              onPressed: () => Navigator.pop(
+                                  context, controller.text.trim()),
                               child: const Text('Rename'),
                             ),
                           ],
                         );
                       },
                     );
-                    if (newName != null && newName.isNotEmpty && newName != group.name) {
-                      await FirebaseFirestore.instance.collection('groups').doc(group.id).update({'name': newName});
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Group renamed.')));
+                    if (newName != null &&
+                        newName.isNotEmpty &&
+                        newName != group.name) {
+                      await FirebaseFirestore.instance
+                          .collection('groups')
+                          .doc(group.id)
+                          .update({'name': newName});
+                      ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Group renamed.')));
                     }
                   },
                 ),
@@ -872,7 +1296,8 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                     context: context,
                     builder: (context) => AlertDialog(
                       title: const Text('Leave Group'),
-                      content: const Text('Are you sure you want to leave this group?'),
+                      content: const Text(
+                          'Are you sure you want to leave this group?'),
                       actions: [
                         TextButton(
                           onPressed: () => Navigator.pop(context, false),
@@ -886,30 +1311,47 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                     ),
                   );
                   if (confirm == true) {
-                    // Remove user from group
-                    final memberToRemove = group.members.firstWhere((m) => m.userId == userId);
-                    await FirebaseFirestore.instance.collection('groups').doc(group.id).update({
-                      'members': FieldValue.arrayRemove([memberToRemove.toMap()]),
-                    });
-                    await FirebaseFirestore.instance.collection('users').doc(userId).update({
-                      'groupIds': FieldValue.arrayRemove([group.id]),
-                    });
-                    Navigator.of(context).pop();
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('You left the group.')));
+                    try {
+                      final memberToRemove =
+                          group.members.firstWhere((m) => m.userId == userId);
+                      print('Attempting to remove member:');
+                      print(memberToRemove.toMap());
+                      await FirebaseFirestore.instance
+                          .collection('groups')
+                          .doc(group.id)
+                          .update({
+                        'members':
+                            FieldValue.arrayRemove([memberToRemove.toMap()]),
+                      });
+                      await FirebaseFirestore.instance
+                          .collection('users')
+                          .doc(userId)
+                          .update({
+                        'groupIds': FieldValue.arrayRemove([group.id]),
+                      });
+                      Navigator.of(context).pop();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('You left the group.')));
+                    } catch (e) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Failed to leave group: $e')));
+                    }
                   }
                 },
               ),
               if (isAdmin)
                 ListTile(
                   leading: const Icon(Icons.delete, color: Colors.red),
-                  title: const Text('Delete Group', style: TextStyle(color: Colors.red)),
+                  title: const Text('Delete Group',
+                      style: TextStyle(color: Colors.red)),
                   onTap: () async {
                     Navigator.pop(context);
                     final confirm = await showDialog<bool>(
                       context: context,
                       builder: (context) => AlertDialog(
                         title: const Text('Delete Group'),
-                        content: const Text('Are you sure you want to delete this group? This action cannot be undone.'),
+                        content: const Text(
+                            'Are you sure you want to delete this group? This action cannot be undone.'),
                         actions: [
                           TextButton(
                             onPressed: () => Navigator.pop(context, false),
@@ -917,7 +1359,8 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                           ),
                           TextButton(
                             onPressed: () => Navigator.pop(context, true),
-                            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+                            child: const Text('Delete',
+                                style: TextStyle(color: Colors.red)),
                           ),
                         ],
                       ),
@@ -927,7 +1370,8 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                         await groupProvider.deleteGroup(group.id, userId);
                         Navigator.of(context).pop();
                       } catch (e) {
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to delete group: $e')));
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                            content: Text('Failed to delete group: $e')));
                       }
                     }
                   },
@@ -955,7 +1399,8 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                   );
                   if (format == null) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('No export format selected.')),
+                      const SnackBar(
+                          content: Text('No export format selected.')),
                     );
                     return;
                   }
@@ -976,7 +1421,9 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
 
                     // Get all group members for split columns
                     final groupMembers = group.members;
-                    final memberIdToName = {for (var m in groupMembers) m.userId: m.username};
+                    final memberIdToName = {
+                      for (var m in groupMembers) m.userId: m.username
+                    };
 
                     // Get user info for paidBy
                     final userIds = expensesSnapshot.docs
@@ -1030,7 +1477,8 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                         }
                       }
                       // Always format as a string for export
-                      final date = dateObj != null ? dateFormat.format(dateObj) : '';
+                      final date =
+                          dateObj != null ? dateFormat.format(dateObj) : '';
                       final paidById = data['paidBy'];
                       final paidByName = userMap[paidById] ?? paidById ?? '';
                       final paidByEmail = userEmailMap[paidById] ?? '';
@@ -1038,24 +1486,31 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                       final notes = data['notes'] ?? '';
                       final category = data['category'] ?? '';
                       final amount = data['amount'] ?? '';
-                      final description = data['description'] ?? data['title'] ?? '';
+                      final description =
+                          data['description'] ?? data['title'] ?? '';
 
                       // Prepare shares for each member
                       List<String> shares = [];
                       if (splitType == 'custom' && data['splitData'] is Map) {
-                        final splitData = data['splitData'] as Map<String, dynamic>;
+                        final splitData =
+                            data['splitData'] as Map<String, dynamic>;
                         for (var m in groupMembers) {
                           final share = splitData[m.userId];
                           shares.add(share != null ? share.toString() : '');
                         }
-                      } else if (splitType == 'equal' && data['splitAmong'] is List) {
+                      } else if (splitType == 'equal' &&
+                          data['splitAmong'] is List) {
                         // Equal split: divide amount equally among splitAmong
-                        final splitAmong = List<String>.from(data['splitAmong'] ?? []);
-                        final perMember = (amount is num && splitAmong.isNotEmpty)
-                            ? (amount / splitAmong.length)
-                            : '';
+                        final splitAmong =
+                            List<String>.from(data['splitAmong'] ?? []);
+                        final perMember =
+                            (amount is num && splitAmong.isNotEmpty)
+                                ? (amount / splitAmong.length)
+                                : '';
                         for (var m in groupMembers) {
-                          shares.add(splitAmong.contains(m.userId) ? perMember.toString() : '');
+                          shares.add(splitAmong.contains(m.userId)
+                              ? perMember.toString()
+                              : '');
                         }
                       } else {
                         // Fallback: leave shares blank
@@ -1080,13 +1535,17 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                     final dir = await getTemporaryDirectory();
                     if (format == 'csv') {
                       String csvData = const ListToCsvConverter().convert(rows);
-                      final file = File('${dir.path}/${group.name}_expenses.csv');
+                      final file =
+                          File('${dir.path}/${group.name}_expenses.csv');
                       await file.writeAsString(csvData);
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Expenses exported to ${file.path}')),
+                        SnackBar(
+                            content: Text('Expenses exported to ${file.path}')),
                       );
                       await Share.shareXFiles([
-                        XFile(file.path, mimeType: 'text/csv', name: '${group.name}_expenses.csv'),
+                        XFile(file.path,
+                            mimeType: 'text/csv',
+                            name: '${group.name}_expenses.csv'),
                       ], subject: 'Exported Expenses CSV');
                     } else if (format == 'pdf') {
                       final pdf = pw.Document();
@@ -1094,18 +1553,23 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                         pw.Page(
                           build: (pw.Context context) => pw.Table.fromTextArray(
                             data: rows,
-                            headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                            headerStyle:
+                                pw.TextStyle(fontWeight: pw.FontWeight.bold),
                             cellAlignment: pw.Alignment.centerLeft,
                           ),
                         ),
                       );
-                      final file = File('${dir.path}/${group.name}_expenses.pdf');
+                      final file =
+                          File('${dir.path}/${group.name}_expenses.pdf');
                       await file.writeAsBytes(await pdf.save());
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Expenses exported to ${file.path}')),
+                        SnackBar(
+                            content: Text('Expenses exported to ${file.path}')),
                       );
                       await Share.shareXFiles([
-                        XFile(file.path, mimeType: 'application/pdf', name: '${group.name}_expenses.pdf'),
+                        XFile(file.path,
+                            mimeType: 'application/pdf',
+                            name: '${group.name}_expenses.pdf'),
                       ], subject: 'Exported Expenses PDF');
                     }
                     Navigator.pop(context);

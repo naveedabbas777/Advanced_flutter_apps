@@ -32,7 +32,8 @@ class _GroupsTabState extends State<GroupsTab> {
       _groupsError = null;
     });
 
-    final user = Provider.of<AppAuthProvider>(context, listen: false).currentUser;
+    final user =
+        Provider.of<AppAuthProvider>(context, listen: false).currentUser;
     if (user == null) {
       if (!mounted) return;
       setState(() {
@@ -49,7 +50,8 @@ class _GroupsTabState extends State<GroupsTab> {
           .get();
       if (!mounted) return;
       setState(() {
-        _groups = snapshot.docs.map((doc) => GroupModel.fromFirestore(doc)).toList();
+        _groups =
+            snapshot.docs.map((doc) => GroupModel.fromFirestore(doc)).toList();
         _isLoadingGroups = false;
       });
     } catch (e) {
@@ -71,9 +73,11 @@ class _GroupsTabState extends State<GroupsTab> {
             decoration: InputDecoration(
               hintText: 'Search groups...',
               prefixIcon: Icon(Icons.search),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              border:
+                  OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             ),
-            onChanged: (val) => setState(() => _groupSearch = val.trim().toLowerCase()),
+            onChanged: (val) =>
+                setState(() => _groupSearch = val.trim().toLowerCase()),
           ),
         ),
         Expanded(
@@ -83,16 +87,20 @@ class _GroupsTabState extends State<GroupsTab> {
                   ? Center(
                       child: Padding(
                       padding: const EdgeInsets.all(16.0),
-                      child: Text('Error loading groups: $_groupsError', textAlign: TextAlign.center),
+                      child: Text('Error loading groups: $_groupsError',
+                          textAlign: TextAlign.center),
                     ))
                   : _groups.isEmpty
                       ? Center(
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.group_outlined, size: 48, color: Colors.grey),
+                              Icon(Icons.group_outlined,
+                                  size: 48, color: Colors.grey),
                               SizedBox(height: 12),
-                              Text('No groups yet.', style: TextStyle(fontSize: 18, color: Colors.grey)),
+                              Text('No groups yet.',
+                                  style: TextStyle(
+                                      fontSize: 18, color: Colors.grey)),
                               SizedBox(height: 12),
                               ElevatedButton.icon(
                                 icon: Icon(Icons.refresh),
@@ -104,7 +112,11 @@ class _GroupsTabState extends State<GroupsTab> {
                                 icon: Icon(Icons.add),
                                 label: Text('Create Group'),
                                 onPressed: () {
-                                  Navigator.push(context, MaterialPageRoute(builder: (context) => CreateGroupScreen()));
+                                  Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                          builder: (context) =>
+                                              CreateGroupScreen()));
                                 },
                               ),
                             ],
@@ -113,9 +125,16 @@ class _GroupsTabState extends State<GroupsTab> {
                       : RefreshIndicator(
                           onRefresh: _fetchGroups,
                           child: ListView.builder(
-                            itemCount: _groups.where((g) => g.name.toLowerCase().contains(_groupSearch)).length,
+                            itemCount: _groups
+                                .where((g) =>
+                                    g.name.toLowerCase().contains(_groupSearch))
+                                .length,
                             itemBuilder: (context, index) {
-                              final filteredGroups = _groups.where((g) => g.name.toLowerCase().contains(_groupSearch)).toList();
+                              final filteredGroups = _groups
+                                  .where((g) => g.name
+                                      .toLowerCase()
+                                      .contains(_groupSearch))
+                                  .toList();
                               final group = filteredGroups[index];
                               final admin = group.members.firstWhere(
                                 (m) => m.isAdmin,
@@ -127,7 +146,9 @@ class _GroupsTabState extends State<GroupsTab> {
                                   joinedAt: DateTime.now(),
                                 ),
                               );
-                              final user = Provider.of<AppAuthProvider>(context, listen: false).currentUser;
+                              final user = Provider.of<AppAuthProvider>(context,
+                                      listen: false)
+                                  .currentUser;
                               final userId = user?.uid ?? '';
 
                               return FutureBuilder<List<int>>(
@@ -139,53 +160,142 @@ class _GroupsTabState extends State<GroupsTab> {
                                     unseenMessages = snapshot.data![0];
                                     unseenExpenses = snapshot.data![1];
                                   }
-                                  return Card(
-                                    margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                    elevation: 2,
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                    child: ListTile(
-                                      leading: badges.Badge(
-                                        showBadge: unseenMessages > 0,
-                                        badgeContent: Text('$unseenMessages', style: const TextStyle(color: Colors.white, fontSize: 10)),
-                                        position: badges.BadgePosition.topEnd(top: -8, end: -8),
-                                        child: badges.Badge(
-                                          showBadge: unseenExpenses > 0,
-                                          badgeContent: Text('$unseenExpenses', style: const TextStyle(color: Colors.white, fontSize: 10)),
-                                          position: badges.BadgePosition.bottomEnd(bottom: -8, end: -8),
-                                          child: CircleAvatar(
-                                            child: Text(group.name.isNotEmpty ? group.name.substring(0, 1).toUpperCase() : '?'),
+                                  return Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 12.0, vertical: 6.0),
+                                    child: Material(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(16),
+                                      elevation: 1,
+                                      child: InkWell(
+                                        borderRadius: BorderRadius.circular(16),
+                                        onTap: () {
+                                          Navigator.of(context).push(
+                                            MaterialPageRoute(
+                                              builder: (_) =>
+                                                  GroupDetailsScreen(
+                                                      groupId: group.id),
+                                            ),
+                                          );
+                                        },
+                                        child: Container(
+                                          decoration: BoxDecoration(
+                                            border: Border.all(
+                                                color: Colors.grey.shade300,
+                                                width: 1),
+                                            borderRadius:
+                                                BorderRadius.circular(16),
+                                          ),
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 8, vertical: 4),
+                                          child: Row(
+                                            children: [
+                                              badges.Badge(
+                                                showBadge: unseenMessages > 0,
+                                                badgeContent: Text(
+                                                    '$unseenMessages',
+                                                    style: const TextStyle(
+                                                        color: Colors.white,
+                                                        fontSize: 10)),
+                                                position:
+                                                    badges.BadgePosition.topEnd(
+                                                        top: -8, end: -8),
+                                                child: badges.Badge(
+                                                  showBadge: unseenExpenses > 0,
+                                                  badgeContent: Text(
+                                                      '$unseenExpenses',
+                                                      style: const TextStyle(
+                                                          color: Colors.white,
+                                                          fontSize: 10)),
+                                                  position: badges.BadgePosition
+                                                      .bottomEnd(
+                                                          bottom: -8, end: -8),
+                                                  child: CircleAvatar(
+                                                    radius: 26,
+                                                    child: Text(
+                                                      group.name.isNotEmpty
+                                                          ? group.name
+                                                              .substring(0, 1)
+                                                              .toUpperCase()
+                                                          : '?',
+                                                      style: const TextStyle(
+                                                          fontSize: 22,
+                                                          fontWeight:
+                                                              FontWeight.bold),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 14),
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  children: [
+                                                    Row(
+                                                      mainAxisAlignment:
+                                                          MainAxisAlignment
+                                                              .spaceBetween,
+                                                      children: [
+                                                        Expanded(
+                                                          child: Text(
+                                                            group.name,
+                                                            style:
+                                                                const TextStyle(
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w600,
+                                                              fontSize: 17,
+                                                            ),
+                                                            overflow:
+                                                                TextOverflow
+                                                                    .ellipsis,
+                                                          ),
+                                                        ),
+                                                        if (group
+                                                                .lastMessageTime !=
+                                                            null)
+                                                          Text(
+                                                            DateFormat(
+                                                                    'hh:mm a')
+                                                                .format(group
+                                                                    .lastMessageTime!),
+                                                            style: TextStyle(
+                                                              color: Colors.grey
+                                                                  .shade600,
+                                                              fontSize: 13,
+                                                            ),
+                                                          ),
+                                                      ],
+                                                    ),
+                                                    const SizedBox(height: 4),
+                                                    Text(
+                                                      group.lastMessage ??
+                                                          'No messages yet.',
+                                                      maxLines: 1,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                      style: TextStyle(
+                                                        color: Colors
+                                                            .grey.shade700,
+                                                        fontSize: 15,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(height: 2),
+                                                    Text(
+                                                      '${group.members.length} Members | Admin: ${admin.username} | ${group.expenseCount} Expenses',
+                                                      style: TextStyle(
+                                                          fontSize: 12,
+                                                          color: Colors
+                                                              .grey.shade600),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ],
                                           ),
                                         ),
                                       ),
-                                      title: Text(group.name, style: TextStyle(fontWeight: FontWeight.bold)),
-                                      subtitle: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            group.lastMessage ?? 'No messages yet.',
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                          SizedBox(height: 4),
-                                          Text(
-                                            '${group.members.length} Members | Admin: ${admin.username} | ${group.expenseCount} Expenses',
-                                            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                                          ),
-                                        ],
-                                      ),
-                                      trailing: group.lastMessageTime != null
-                                          ? Text(
-                                              DateFormat.jm().format(group.lastMessageTime!),
-                                              style: TextStyle(fontSize: 12, color: Colors.grey),
-                                            )
-                                          : null,
-                                      onTap: () {
-                                        Navigator.of(context).push(
-                                          MaterialPageRoute(
-                                            builder: (_) => GroupDetailsScreen(groupId: group.id),
-                                          ),
-                                        );
-                                      },
                                     ),
                                   );
                                 },
@@ -221,10 +331,14 @@ class _GroupsTabState extends State<GroupsTab> {
       unseenMessages = msgQuery.docs.where((doc) {
         final ts = doc['timestamp'] as Timestamp?;
         final senderId = doc['senderId'] as String?;
-        return ts != null && lastSeenMsg != null && ts.toDate().isAfter(lastSeenMsg.toDate()) && senderId != userId;
+        return ts != null &&
+            lastSeenMsg != null &&
+            ts.toDate().isAfter(lastSeenMsg.toDate()) &&
+            senderId != userId;
       }).length;
     } else {
-      unseenMessages = msgQuery.docs.where((doc) => doc['senderId'] != userId).length;
+      unseenMessages =
+          msgQuery.docs.where((doc) => doc['senderId'] != userId).length;
     }
     // Get last seen for expenses
     final expenseViewDoc = await FirebaseFirestore.instance
@@ -247,10 +361,14 @@ class _GroupsTabState extends State<GroupsTab> {
       unseenExpenses = expenseQuery.docs.where((doc) {
         final ts = doc['timestamp'] as Timestamp?;
         final addedBy = doc['addedBy'] as String?;
-        return ts != null && lastSeenExpense != null && ts.toDate().isAfter(lastSeenExpense.toDate()) && addedBy != userId;
+        return ts != null &&
+            lastSeenExpense != null &&
+            ts.toDate().isAfter(lastSeenExpense.toDate()) &&
+            addedBy != userId;
       }).length;
     } else {
-      unseenExpenses = expenseQuery.docs.where((doc) => doc['addedBy'] != userId).length;
+      unseenExpenses =
+          expenseQuery.docs.where((doc) => doc['addedBy'] != userId).length;
     }
     return [unseenMessages, unseenExpenses];
   }

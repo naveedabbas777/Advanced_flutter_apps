@@ -49,6 +49,8 @@ class GroupModel {
   final String? lastMessage;
   final DateTime? lastMessageTime;
   final int expenseCount;
+  final String? description;
+  final double? initialAmount;
 
   GroupModel({
     required this.id,
@@ -61,6 +63,8 @@ class GroupModel {
     this.lastMessage,
     this.lastMessageTime,
     this.expenseCount = 0,
+    this.description,
+    this.initialAmount,
   });
 
   factory GroupModel.fromFirestore(DocumentSnapshot doc) {
@@ -71,7 +75,8 @@ class GroupModel {
       createdBy: data['createdBy'] ?? '',
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       members: (data['members'] as List<dynamic>?)
-              ?.map((memberData) => GroupMember.fromMap(memberData as Map<String, dynamic>))
+              ?.map((memberData) =>
+                  GroupMember.fromMap(memberData as Map<String, dynamic>))
               .toList() ??
           [],
       memberIds: List<String>.from(data['memberIds'] ?? []),
@@ -79,6 +84,10 @@ class GroupModel {
       lastMessage: data['lastMessage'],
       lastMessageTime: (data['lastMessageTime'] as Timestamp?)?.toDate(),
       expenseCount: data['expenseCount'] ?? 0,
+      description: data['description'],
+      initialAmount: data['initialAmount'] != null
+          ? (data['initialAmount'] as num).toDouble()
+          : null,
     );
   }
 
@@ -91,8 +100,11 @@ class GroupModel {
       'memberIds': memberIds,
       if (photoUrl != null) 'photoUrl': photoUrl,
       'lastMessage': lastMessage,
-      'lastMessageTime': lastMessageTime != null ? Timestamp.fromDate(lastMessageTime!) : null,
+      'lastMessageTime':
+          lastMessageTime != null ? Timestamp.fromDate(lastMessageTime!) : null,
       'expenseCount': expenseCount,
+      if (description != null) 'description': description,
+      if (initialAmount != null) 'initialAmount': initialAmount,
     };
   }
 
@@ -107,6 +119,8 @@ class GroupModel {
     String? lastMessage,
     DateTime? lastMessageTime,
     int? expenseCount,
+    String? description,
+    double? initialAmount,
   }) {
     return GroupModel(
       id: id ?? this.id,
@@ -119,6 +133,8 @@ class GroupModel {
       lastMessage: lastMessage ?? this.lastMessage,
       lastMessageTime: lastMessageTime ?? this.lastMessageTime,
       expenseCount: expenseCount ?? this.expenseCount,
+      description: description ?? this.description,
+      initialAmount: initialAmount ?? this.initialAmount,
     );
   }
 
@@ -134,6 +150,8 @@ class GroupModel {
       'lastMessage': lastMessage,
       'lastMessageTime': lastMessageTime?.toIso8601String(),
       'expenseCount': expenseCount,
+      'description': description,
+      'initialAmount': initialAmount,
     };
   }
 
@@ -143,9 +161,8 @@ class GroupModel {
       name: json['name'],
       createdBy: json['createdBy'],
       createdAt: DateTime.parse(json['createdAt']),
-      members: (json['members'] as List)
-          .map((m) => GroupMember.fromMap(m))
-          .toList(),
+      members:
+          (json['members'] as List).map((m) => GroupMember.fromMap(m)).toList(),
       memberIds: List<String>.from(json['memberIds'] ?? []),
       photoUrl: json['photoUrl'],
       lastMessage: json['lastMessage'],
@@ -153,6 +170,10 @@ class GroupModel {
           ? DateTime.parse(json['lastMessageTime'])
           : null,
       expenseCount: json['expenseCount'] ?? 0,
+      description: json['description'],
+      initialAmount: json['initialAmount'] != null
+          ? (json['initialAmount'] as num).toDouble()
+          : null,
     );
   }
-} 
+}
