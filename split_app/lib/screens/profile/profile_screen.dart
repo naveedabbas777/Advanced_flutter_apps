@@ -6,6 +6,8 @@ import '../../providers/theme_provider.dart';
 import '../../providers/group_provider.dart';
 import '../../models/group_model.dart';
 import 'notifications_screen.dart';
+import 'package:badges/badges.dart' as badges;
+import 'package:rxdart/rxdart.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -77,13 +79,49 @@ class _ProfileScreenState extends State<ProfileScreen> {
       appBar: AppBar(
         title: const Text('Profile'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications),
-            tooltip: 'Notifications',
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => NotificationsScreen(),
+          StreamBuilder<List<QuerySnapshot>>(
+            stream: Rx.combineLatest3(
+              FirebaseFirestore.instance
+                  .collection('group_invitations')
+                  .where('invitedUserId', isEqualTo: userModel.uid)
+                  .where('status', isEqualTo: 'pending')
+                  .where('seen', isEqualTo: false)
+                  .snapshots(),
+              FirebaseFirestore.instance
+                  .collection('group_events')
+                  .where('userId', isEqualTo: userModel.uid)
+                  .where('seen', isEqualTo: false)
+                  .snapshots(),
+              FirebaseFirestore.instance
+                  .collection('expense_notifications')
+                  .where('userId', isEqualTo: userModel.uid)
+                  .where('seen', isEqualTo: false)
+                  .snapshots(),
+              (QuerySnapshot a, QuerySnapshot b, QuerySnapshot c) => [a, b, c],
+            ),
+            builder: (context, snapshot) {
+              int unseenCount = 0;
+              if (snapshot.hasData) {
+                unseenCount = snapshot.data![0].docs.length +
+                    snapshot.data![1].docs.length +
+                    snapshot.data![2].docs.length;
+              }
+              return badges.Badge(
+                showBadge: unseenCount > 0,
+                badgeContent: Text(
+                  unseenCount.toString(),
+                  style: TextStyle(color: Colors.white, fontSize: 10),
+                ),
+                child: IconButton(
+                  icon: const Icon(Icons.notifications),
+                  tooltip: 'Notifications',
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => NotificationsScreen(),
+                      ),
+                    );
+                  },
                 ),
               );
             },
@@ -161,7 +199,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                         const SizedBox(width: 8),
                         ElevatedButton(
-                          onPressed: authProvider.isLoading ? null : _updateProfile,
+                          onPressed:
+                              authProvider.isLoading ? null : _updateProfile,
                           child: authProvider.isLoading
                               ? const CircularProgressIndicator()
                               : const Text('Save'),
@@ -183,7 +222,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   Divider(),
                   // Group summary counts
                   StreamBuilder<List<GroupModel>>(
-                    stream: Provider.of<GroupProvider>(context, listen: false).getUserGroupsStream(userModel.uid),
+                    stream: Provider.of<GroupProvider>(context, listen: false)
+                        .getUserGroupsStream(userModel.uid),
                     builder: (context, snapshot) {
                       if (snapshot.connectionState == ConnectionState.waiting) {
                         return const Center(child: CircularProgressIndicator());
@@ -191,29 +231,45 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       if (snapshot.hasError) {
                         return Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                          child: Text('Error loading groups: \\${snapshot.error}', style: TextStyle(color: Colors.red)),
+                          child: Text(
+                              'Error loading groups: \\${snapshot.error}',
+                              style: TextStyle(color: Colors.red)),
                         );
                       }
                       final groups = snapshot.data ?? [];
-                      final adminCount = groups.where((g) => g.members.any((m) => m.userId == userModel.uid && m.isAdmin)).length;
+                      final adminCount = groups
+                          .where((g) => g.members.any(
+                              (m) => m.userId == userModel.uid && m.isAdmin))
+                          .length;
                       return Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 8.0),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 0, vertical: 8.0),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                           children: [
                             Expanded(
                               child: Card(
-                                color: Theme.of(context).colorScheme.primaryContainer,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .primaryContainer,
                                 child: Padding(
-                                  padding: const EdgeInsets.symmetric(vertical: 20.0),
+                                  padding: const EdgeInsets.symmetric(
+                                      vertical: 20.0),
                                   child: Column(
                                     children: [
                                       Text(
                                         '${groups.length}',
-                                        style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary),
+                                        style: TextStyle(
+                                            fontSize: 28,
+                                            fontWeight: FontWeight.bold,
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .primary),
                                       ),
                                       SizedBox(height: 4),
-                                      Text('Groups\nMember', textAlign: TextAlign.center, style: TextStyle(fontSize: 14)),
+                                      Text('Groups\nMember',
+                                          textAlign: TextAlign.center,
+                                          style: TextStyle(fontSize: 14)),
                                     ],
                                   ),
                                 ),
@@ -222,17 +278,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             SizedBox(width: 12),
                             Expanded(
                               child: Card(
-                                color: Theme.of(context).colorScheme.secondaryContainer,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .secondaryContainer,
                                 child: Padding(
-                                  padding: const EdgeInsets.symmetric(vertical: 20.0),
+                                  padding: const EdgeInsets.symmetric(
+                                      vertical: 20.0),
                                   child: Column(
                                     children: [
                                       Text(
                                         '$adminCount',
-                                        style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.secondary),
+                                        style: TextStyle(
+                                            fontSize: 28,
+                                            fontWeight: FontWeight.bold,
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .secondary),
                                       ),
                                       SizedBox(height: 4),
-                                      Text('Groups\nAdmin', textAlign: TextAlign.center, style: TextStyle(fontSize: 14)),
+                                      Text('Groups\nAdmin',
+                                          textAlign: TextAlign.center,
+                                          style: TextStyle(fontSize: 14)),
                                     ],
                                   ),
                                 ),
@@ -252,7 +318,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     },
                   ),
                   StreamBuilder<List<GroupModel>>(
-                    stream: Provider.of<GroupProvider>(context, listen: false).getUserGroupsStream(userModel.uid),
+                    stream: Provider.of<GroupProvider>(context, listen: false)
+                        .getUserGroupsStream(userModel.uid),
                     builder: (context, snapshot) {
                       if (snapshot.connectionState == ConnectionState.waiting) {
                         return const Center(child: CircularProgressIndicator());
@@ -260,7 +327,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       if (snapshot.hasError) {
                         return Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                          child: Text('Error loading groups: \\${snapshot.error}', style: TextStyle(color: Colors.red)),
+                          child: Text(
+                              'Error loading groups: \\${snapshot.error}',
+                              style: TextStyle(color: Colors.red)),
                         );
                       }
                       if (!snapshot.hasData || snapshot.data!.isEmpty) {
@@ -276,10 +345,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         itemBuilder: (context, index) {
                           final group = snapshot.data![index];
                           return ListTile(
-                            title: Text(group.name, style: TextStyle(fontWeight: FontWeight.w500)),
+                            title: Text(group.name,
+                                style: TextStyle(fontWeight: FontWeight.w500)),
                             onTap: () {
                               // Navigate to group details screen
-                              Navigator.pushNamed(context, '/group-details', arguments: {'groupId': group.id, 'groupName': group.name});
+                              Navigator.pushNamed(context, '/group-details',
+                                  arguments: {
+                                    'groupId': group.id,
+                                    'groupName': group.name
+                                  });
                             },
                           );
                         },
@@ -308,7 +382,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       if (snapshot.hasError) {
                         return Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                          child: Text('Error loading invitations: ${snapshot.error}', style: TextStyle(color: Colors.red)),
+                          child: Text(
+                              'Error loading invitations: ${snapshot.error}',
+                              style: TextStyle(color: Colors.red)),
                         );
                       }
                       if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
@@ -323,9 +399,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         itemCount: snapshot.data!.docs.length,
                         itemBuilder: (context, index) {
                           final invitation = snapshot.data!.docs[index];
-                          final invitationData = invitation.data() as Map<String, dynamic>;
-                          final groupName = invitationData['groupName'] ?? 'Unnamed Group';
-                          final invitedByUsername = invitationData['invitedByUsername'] ?? 'Unknown';
+                          final invitationData =
+                              invitation.data() as Map<String, dynamic>;
+                          final groupName =
+                              invitationData['groupName'] ?? 'Unnamed Group';
+                          final invitedByUsername =
+                              invitationData['invitedByUsername'] ?? 'Unknown';
 
                           return ListTile(
                             title: Text('Join: $groupName'),
@@ -407,7 +486,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
 
       if (confirmed == true && mounted) {
-        final authProvider = Provider.of<AppAuthProvider>(context, listen: false);
+        final authProvider =
+            Provider.of<AppAuthProvider>(context, listen: false);
         await authProvider.signOut();
         if (!mounted) return;
         Navigator.pushReplacementNamed(context, '/login');
@@ -422,4 +502,4 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
     }
   }
-} 
+}

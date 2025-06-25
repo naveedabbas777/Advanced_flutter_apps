@@ -501,9 +501,9 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                             .doc(widget.groupId)
                             .collection('expenses')
                             .snapshots(),
-                        builder: (context, snapshot) {
-                          if (!snapshot.hasData ||
-                              snapshot.data!.docs.isEmpty) {
+                        builder: (context, expenseSnapshot) {
+                          if (!expenseSnapshot.hasData ||
+                              expenseSnapshot.data!.docs.isEmpty) {
                             // Even if there are no expenses, we still want to show the initial amount if present
                             final sortedMembers = [
                               ...groupMembers
@@ -589,136 +589,168 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                               ],
                             );
                           }
-                          final expenses = snapshot.data!.docs;
-                          final sortedMembers = [...groupMembers]
-                            ..sort((a, b) => a.username.compareTo(b.username));
-                          final Map<String, double> paidMap = {
-                            for (var m in sortedMembers) m.userId: 0.0
-                          };
-                          final Map<String, double> owedMap = {
-                            for (var m in sortedMembers) m.userId: 0.0
-                          };
-
-                          // --- Add initial amount as a virtual expense ---
-                          if (group.initialAmount != null &&
-                              group.initialAmount! > 0 &&
-                              group.memberIds.isNotEmpty) {
-                            final double perUser =
-                                group.initialAmount! / group.memberIds.length;
-                            // Add to Paid (creator)
-                            if (paidMap.containsKey(group.createdBy)) {
-                              paidMap[group.createdBy] =
-                                  paidMap[group.createdBy]! +
-                                      group.initialAmount!;
-                            }
-                            // Add to Owes (all members)
-                            for (var m in sortedMembers) {
-                              owedMap[m.userId] = owedMap[m.userId]! + perUser;
-                            }
-                          }
-                          // --- End virtual expense ---
-
-                          for (var doc in expenses) {
-                            final data = doc.data() as Map<String, dynamic>;
-                            final amount =
-                                (data['amount'] as num?)?.toDouble() ?? 0.0;
-                            final paidBy = data['paidBy'] as String?;
-                            final splitType = data['splitType'] ?? 'equal';
-
-                            // Add to Paid
-                            if (paidBy != null && paidMap.containsKey(paidBy)) {
-                              paidMap[paidBy] = paidMap[paidBy]! + amount;
-                            }
-
-                            // Calculate Owes
-                            if (splitType == 'custom' &&
-                                data['splitData'] is Map) {
-                              final splitData =
-                                  data['splitData'] as Map<String, dynamic>;
-                              splitData.forEach((uid, share) {
-                                if (owedMap.containsKey(uid)) {
-                                  owedMap[uid] = owedMap[uid]! +
-                                      (share is num ? share.toDouble() : 0.0);
-                                }
-                              });
-                            } else if (splitType == 'equal' &&
-                                data['splitAmong'] is List) {
-                              final splitAmong =
-                                  List<String>.from(data['splitAmong'] ?? []);
-                              final perUser = splitAmong.isNotEmpty
-                                  ? amount / splitAmong.length
-                                  : 0.0;
-                              for (var uid in splitAmong) {
-                                if (owedMap.containsKey(uid)) {
-                                  owedMap[uid] = owedMap[uid]! + perUser;
-                                }
+                          final expenses = expenseSnapshot.data!.docs;
+                          // Fetch settlements as a FutureBuilder
+                          return FutureBuilder<QuerySnapshot>(
+                            future: FirebaseFirestore.instance
+                                .collection('groups')
+                                .doc(widget.groupId)
+                                .collection('settlements')
+                                .orderBy('timestamp', descending: false)
+                                .get(),
+                            builder: (context, settlementSnapshot) {
+                              if (!settlementSnapshot.hasData) {
+                                return const Center(
+                                    child: CircularProgressIndicator());
                               }
-                            } else {
-                              // Fallback: split among all members
-                              final perUser = sortedMembers.isNotEmpty
-                                  ? amount / sortedMembers.length
-                                  : 0.0;
-                              for (var m in sortedMembers) {
-                                owedMap[m.userId] =
-                                    owedMap[m.userId]! + perUser;
-                              }
-                            }
-                          }
-                          final Map<String, double> netMap = {
-                            for (var m in sortedMembers)
-                              m.userId: (paidMap[m.userId] ?? 0) -
-                                  (owedMap[m.userId] ?? 0)
-                          };
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Group Summary Table',
-                                  style:
-                                      Theme.of(context).textTheme.titleMedium),
+                              final settlements = settlementSnapshot.data!.docs;
+                              final sortedMembers = [...groupMembers]..sort(
+                                  (a, b) => a.username.compareTo(b.username));
+                              final Map<String, double> paidMap = {
+                                for (var m in sortedMembers) m.userId: 0.0
+                              };
+                              final Map<String, double> owedMap = {
+                                for (var m in sortedMembers) m.userId: 0.0
+                              };
+
+                              // --- Add initial amount as a virtual expense ---
                               if (group.initialAmount != null &&
-                                  group.initialAmount! > 0)
-                                Padding(
-                                  padding: const EdgeInsets.only(bottom: 4.0),
-                                  child: Text(
-                                    'Initial amount of ${group.initialAmount!.toStringAsFixed(2)} is included as an equal split among all members.',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodySmall
-                                        ?.copyWith(color: Colors.blueGrey),
+                                  group.initialAmount! > 0 &&
+                                  group.memberIds.isNotEmpty) {
+                                final double perUser = group.initialAmount! /
+                                    group.memberIds.length;
+                                if (paidMap.containsKey(group.createdBy)) {
+                                  paidMap[group.createdBy] =
+                                      paidMap[group.createdBy]! +
+                                          group.initialAmount!;
+                                }
+                                for (var m in sortedMembers) {
+                                  owedMap[m.userId] =
+                                      owedMap[m.userId]! + perUser;
+                                }
+                              }
+                              for (var doc in expenses) {
+                                final data = doc.data() as Map<String, dynamic>;
+                                final amount =
+                                    (data['amount'] as num?)?.toDouble() ?? 0.0;
+                                final paidBy = data['paidBy'] as String?;
+                                final splitType = data['splitType'] ?? 'equal';
+                                if (paidBy != null &&
+                                    paidMap.containsKey(paidBy)) {
+                                  paidMap[paidBy] = paidMap[paidBy]! + amount;
+                                }
+                                if (splitType == 'custom' &&
+                                    data['splitData'] is Map) {
+                                  final splitData =
+                                      data['splitData'] as Map<String, dynamic>;
+                                  splitData.forEach((uid, share) {
+                                    if (owedMap.containsKey(uid)) {
+                                      owedMap[uid] = owedMap[uid]! +
+                                          (share is num
+                                              ? share.toDouble()
+                                              : 0.0);
+                                    }
+                                  });
+                                } else if (splitType == 'equal' &&
+                                    data['splitAmong'] is List) {
+                                  final splitAmong = List<String>.from(
+                                      data['splitAmong'] ?? []);
+                                  final perUser = splitAmong.isNotEmpty
+                                      ? amount / splitAmong.length
+                                      : 0.0;
+                                  for (var uid in splitAmong) {
+                                    if (owedMap.containsKey(uid)) {
+                                      owedMap[uid] = owedMap[uid]! + perUser;
+                                    }
+                                  }
+                                } else {
+                                  final perUser = sortedMembers.isNotEmpty
+                                      ? amount / sortedMembers.length
+                                      : 0.0;
+                                  for (var m in sortedMembers) {
+                                    owedMap[m.userId] =
+                                        owedMap[m.userId]! + perUser;
+                                  }
+                                }
+                              }
+                              final Map<String, double> netMap = {
+                                for (var m in sortedMembers)
+                                  m.userId: (paidMap[m.userId] ?? 0) -
+                                      (owedMap[m.userId] ?? 0)
+                              };
+                              // --- Apply settlements ---
+                              for (var doc in settlements) {
+                                final data = doc.data() as Map<String, dynamic>;
+                                final fromUserId =
+                                    data['fromUserId'] as String?;
+                                final toUserId = data['toUserId'] as String?;
+                                final amount =
+                                    (data['amount'] as num?)?.toDouble() ?? 0.0;
+                                if (fromUserId != null &&
+                                    toUserId != null &&
+                                    amount > 0) {
+                                  netMap[fromUserId] =
+                                      (netMap[fromUserId] ?? 0) + amount;
+                                  netMap[toUserId] =
+                                      (netMap[toUserId] ?? 0) - amount;
+                                }
+                              }
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('Group Summary Table',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleMedium),
+                                  if (group.initialAmount != null &&
+                                      group.initialAmount! > 0)
+                                    Padding(
+                                      padding:
+                                          const EdgeInsets.only(bottom: 4.0),
+                                      child: Text(
+                                        'Initial amount of ${group.initialAmount!.toStringAsFixed(2)} is included as an equal split among all members.',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall
+                                            ?.copyWith(color: Colors.blueGrey),
+                                      ),
+                                    ),
+                                  const SizedBox(height: 8),
+                                  SingleChildScrollView(
+                                    scrollDirection: Axis.horizontal,
+                                    child: DataTable(
+                                      columns: const [
+                                        DataColumn(label: Text('Member')),
+                                        DataColumn(label: Text('Paid')),
+                                        DataColumn(label: Text('Owes')),
+                                        DataColumn(label: Text('Net')),
+                                      ],
+                                      rows: [
+                                        for (var m in sortedMembers)
+                                          DataRow(cells: [
+                                            DataCell(Text(m.username)),
+                                            DataCell(Text(paidMap[m.userId]!
+                                                .toStringAsFixed(2))),
+                                            DataCell(Text(owedMap[m.userId]!
+                                                .toStringAsFixed(2))),
+                                            DataCell(Text(
+                                                netMap[m.userId]!
+                                                    .toStringAsFixed(2),
+                                                style: TextStyle(
+                                                    color: (netMap[m.userId]! >
+                                                            0)
+                                                        ? Colors.green
+                                                        : (netMap[m.userId]! <
+                                                                0)
+                                                            ? Colors.red
+                                                            : Colors.grey))),
+                                          ]),
+                                      ],
+                                    ),
                                   ),
-                                ),
-                              const SizedBox(height: 8),
-                              SingleChildScrollView(
-                                scrollDirection: Axis.horizontal,
-                                child: DataTable(
-                                  columns: const [
-                                    DataColumn(label: Text('Member')),
-                                    DataColumn(label: Text('Paid')),
-                                    DataColumn(label: Text('Owes')),
-                                    DataColumn(label: Text('Net')),
-                                  ],
-                                  rows: [
-                                    for (var m in sortedMembers)
-                                      DataRow(cells: [
-                                        DataCell(Text(m.username)),
-                                        DataCell(Text(paidMap[m.userId]!
-                                            .toStringAsFixed(2))),
-                                        DataCell(Text(owedMap[m.userId]!
-                                            .toStringAsFixed(2))),
-                                        DataCell(Text(
-                                            netMap[m.userId]!
-                                                .toStringAsFixed(2),
-                                            style: TextStyle(
-                                                color: (netMap[m.userId]! > 0)
-                                                    ? Colors.green
-                                                    : (netMap[m.userId]! < 0)
-                                                        ? Colors.red
-                                                        : Colors.grey))),
-                                      ]),
-                                  ],
-                                ),
-                              ),
-                            ],
+                                ],
+                              );
+                            },
                           );
                         },
                       ),
