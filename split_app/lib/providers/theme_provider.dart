@@ -19,9 +19,10 @@ class ThemeProvider with ChangeNotifier {
   }
 
   void toggleTheme() async {
-    _themeMode = _themeMode == ThemeMode.light ? ThemeMode.dark : ThemeMode.light;
+    _themeMode =
+        _themeMode == ThemeMode.light ? ThemeMode.dark : ThemeMode.light;
     final prefs = await SharedPreferences.getInstance();
-    prefs.setBool('isDarkMode', _themeMode == ThemeMode.dark);
+    await prefs.setBool('isDarkMode', _themeMode == ThemeMode.dark);
     notifyListeners();
   }
 
@@ -33,9 +34,10 @@ class ThemeProvider with ChangeNotifier {
       foregroundColor: Colors.white,
       elevation: 0,
       centerTitle: true,
-      titleTextStyle: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+      titleTextStyle: TextStyle(
+          color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
     ),
-    cardTheme: CardTheme(
+    cardTheme: CardThemeData(
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       margin: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -77,8 +79,10 @@ class ThemeProvider with ChangeNotifier {
       fillColor: Colors.grey.shade100,
     ),
     textTheme: TextTheme(
-      titleLarge: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.deepPurple),
-      titleMedium: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.black87),
+      titleLarge: TextStyle(
+          fontSize: 24, fontWeight: FontWeight.bold, color: Colors.deepPurple),
+      titleMedium: TextStyle(
+          fontSize: 18, fontWeight: FontWeight.w600, color: Colors.black87),
       titleSmall: TextStyle(fontSize: 14, color: Colors.black54),
       bodyLarge: TextStyle(fontSize: 16, color: Colors.black87),
       bodyMedium: TextStyle(fontSize: 14, color: Colors.black54),
@@ -90,7 +94,7 @@ class ThemeProvider with ChangeNotifier {
       backgroundColor: Colors.grey.shade900,
       elevation: 6,
     ),
-    dialogTheme: DialogTheme(
+    dialogTheme: DialogThemeData(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
       elevation: 8,
     ),
@@ -119,9 +123,10 @@ class ThemeProvider with ChangeNotifier {
       foregroundColor: Colors.white,
       elevation: 0,
       centerTitle: true,
-      titleTextStyle: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+      titleTextStyle: TextStyle(
+          color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
     ),
-    cardTheme: CardTheme(
+    cardTheme: CardThemeData(
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       color: Colors.grey[800],
@@ -164,8 +169,10 @@ class ThemeProvider with ChangeNotifier {
       fillColor: Colors.grey.shade700,
     ),
     textTheme: TextTheme(
-      titleLarge: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
-      titleMedium: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.white70),
+      titleLarge: TextStyle(
+          fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
+      titleMedium: TextStyle(
+          fontSize: 18, fontWeight: FontWeight.w600, color: Colors.white70),
       titleSmall: TextStyle(fontSize: 14, color: Colors.white54),
       bodyLarge: TextStyle(fontSize: 16, color: Colors.white),
       bodyMedium: TextStyle(fontSize: 14, color: Colors.white70),
@@ -177,11 +184,12 @@ class ThemeProvider with ChangeNotifier {
       backgroundColor: Colors.grey.shade900,
       elevation: 6,
     ),
-    dialogTheme: DialogTheme(
+    dialogTheme: DialogThemeData(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
       elevation: 8,
       backgroundColor: Colors.grey[800],
-      titleTextStyle: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+      titleTextStyle: TextStyle(
+          color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
       contentTextStyle: TextStyle(color: Colors.white70),
     ),
     bottomNavigationBarTheme: BottomNavigationBarThemeData(

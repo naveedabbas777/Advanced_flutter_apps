@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/group_model.dart';
 import '../models/user_model.dart';
-import 'package:rxdart/rxdart.dart';
 import 'dart:async';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
+import '../services/notification_listener_service.dart';
 
 class GroupProvider extends ChangeNotifier {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -154,6 +154,9 @@ class GroupProvider extends ChangeNotifier {
         'createdAt': FieldValue.serverTimestamp(),
       });
 
+      // Note: Local notifications are handled automatically by NotificationListenerService
+      // which only notifies the invited user (not the inviter)
+
       // Add invitation to user's invitations list (this is handled by the invitation itself, no need for invitationIds array in user doc)
       // The user will see invitations in their InvitationsScreen by querying the group_invitations collection.
       // If you still want to track invitation IDs on the user document, ensure they are also updated when invitations are accepted/rejected
@@ -210,6 +213,9 @@ class GroupProvider extends ChangeNotifier {
         'status': 'accepted',
         'acceptedAt': FieldValue.serverTimestamp(),
       });
+
+      // Refresh notification listeners to include new group
+      await NotificationListenerService().refreshUserGroups();
 
       _isLoading = false;
       notifyListeners();
@@ -293,6 +299,9 @@ class GroupProvider extends ChangeNotifier {
         'groupIds': FieldValue.arrayRemove([groupId]),
       });
 
+      // Refresh notification listeners
+      await NotificationListenerService().refreshUserGroups();
+
       _isLoading = false;
       notifyListeners();
     } catch (e) {
@@ -351,11 +360,15 @@ class GroupProvider extends ChangeNotifier {
         'expenseCount': FieldValue.increment(1),
       });
 
-      // Send group expense notification to all members
+      // Create Firestore notification documents for all members
+      // (Local notifications will be handled automatically by NotificationListenerService
+      // which filters out notifications for own actions)
       final groupDoc = await _firestore.collection('groups').doc(groupId).get();
       final groupName = groupDoc.data()?['name'] ?? 'Group';
       final memberIds = List<String>.from(groupDoc.data()?['memberIds'] ?? []);
+
       for (final userId in memberIds) {
+        // Create Firestore notification document
         await _firestore.collection('group_expense_notifications').add({
           'userId': userId,
           'groupId': groupId,

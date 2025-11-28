@@ -5,6 +5,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/user_model.dart';
 import 'dart:async'; // Import for StreamSubscription
 import '../services/auth_service.dart';
+import '../services/notification_service.dart';
+import '../services/notification_listener_service.dart';
+import '../services/badge_service.dart';
+import '../services/fcm_service.dart';
 // import 'package:http/http.dart' as http;
 // import 'dart:convert';
 
@@ -41,9 +45,17 @@ class AppAuthProvider extends ChangeNotifier {
       if (user != null) {
         await _setupUserListener();
         await _updateLastActive();
+        // Start listening for notifications
+        await NotificationListenerService().startListening(user.uid);
+        // Start tracking badges
+        await BadgeService().startTracking(user.uid);
       } else {
         _userModel = null;
         _userSubscription?.cancel();
+        // Stop listening for notifications
+        await NotificationListenerService().stopListening();
+        // Stop tracking badges
+        await BadgeService().stopTracking();
       }
       notifyListeners();
     });
@@ -69,7 +81,10 @@ class AppAuthProvider extends ChangeNotifier {
 
   Future<void> _updateLastActive() async {
     if (_user == null) return;
-    await FirebaseFirestore.instance.collection('users').doc(_user!.uid).update({
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(_user!.uid)
+        .update({
       'lastActive': FieldValue.serverTimestamp(),
     });
   }
@@ -80,7 +95,8 @@ class AppAuthProvider extends ChangeNotifier {
       _error = null;
       notifyListeners();
 
-      await _authService.registerWithEmailAndPassword(email, password, username);
+      await _authService.registerWithEmailAndPassword(
+          email, password, username);
       await _updateLastActive();
       _isLoading = false;
       notifyListeners();
@@ -137,7 +153,7 @@ class AppAuthProvider extends ChangeNotifier {
       notifyListeners();
 
       await _authService.resetPassword(email);
-      
+
       _isLoading = false;
       notifyListeners();
     } catch (e) {
@@ -154,7 +170,7 @@ class AppAuthProvider extends ChangeNotifier {
       notifyListeners();
 
       await _authService.resendVerificationEmail();
-      
+
       _isLoading = false;
       notifyListeners();
     } catch (e) {
@@ -202,7 +218,10 @@ class AppAuthProvider extends ChangeNotifier {
       }
 
       if (updates.isNotEmpty) {
-        await FirebaseFirestore.instance.collection('users').doc(_user!.uid).update(updates);
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(_user!.uid)
+            .update(updates);
         await _setupUserListener();
       }
 
@@ -219,7 +238,10 @@ class AppAuthProvider extends ChangeNotifier {
     try {
       if (_user == null) return;
 
-      await FirebaseFirestore.instance.collection('users').doc(_user!.uid).update({
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(_user!.uid)
+          .update({
         'groupIds': FieldValue.arrayUnion([groupId]),
       });
 
@@ -233,7 +255,10 @@ class AppAuthProvider extends ChangeNotifier {
     try {
       if (_user == null) return;
 
-      await FirebaseFirestore.instance.collection('users').doc(_user!.uid).update({
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(_user!.uid)
+          .update({
         'groupIds': FieldValue.arrayRemove([groupId]),
       });
 
@@ -247,7 +272,10 @@ class AppAuthProvider extends ChangeNotifier {
     try {
       if (_user == null) return;
 
-      await FirebaseFirestore.instance.collection('users').doc(_user!.uid).update({
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(_user!.uid)
+          .update({
         'invitationIds': FieldValue.arrayUnion([invitationId]),
       });
 
@@ -261,7 +289,10 @@ class AppAuthProvider extends ChangeNotifier {
     try {
       if (_user == null) return;
 
-      await FirebaseFirestore.instance.collection('users').doc(_user!.uid).update({
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(_user!.uid)
+          .update({
         'invitationIds': FieldValue.arrayRemove([invitationId]),
       });
 
@@ -284,11 +315,15 @@ class AppAuthProvider extends ChangeNotifier {
         throw 'Inviting user not logged in.';
       }
 
-      final groupDoc = await FirebaseFirestore.instance.collection('groups').doc(groupId).get();
+      final groupDoc = await FirebaseFirestore.instance
+          .collection('groups')
+          .doc(groupId)
+          .get();
       if (!groupDoc.exists) {
         throw 'Group does not exist.';
       }
-      List<String> currentMembers = List<String>.from(groupDoc.data()?['members'] ?? []);
+      List<String> currentMembers =
+          List<String>.from(groupDoc.data()?['members'] ?? []);
 
       final invitedUserSnapshot = await FirebaseFirestore.instance
           .collection('users')
@@ -318,15 +353,20 @@ class AppAuthProvider extends ChangeNotifier {
         throw 'An invitation to this user for this group is already pending.';
       }
 
+      final groupName = groupDoc.data()?['name'] ?? 'Unnamed Group';
+
       await FirebaseFirestore.instance.collection('group_invitations').add({
         'groupId': groupId,
-        'groupName': groupDoc.data()?['name'] ?? 'Unnamed Group',
+        'groupName': groupName,
         'invitedByUserId': invitingUser.uid,
         'invitedUserEmail': memberEmail,
         'invitedUserId': invitedUserId,
         'status': 'pending',
         'timestamp': FieldValue.serverTimestamp(),
       });
+
+      // Note: Local notifications are handled automatically by NotificationListenerService
+      // which only notifies the invited user (not the inviter)
     } catch (e) {
       throw 'Failed to send invitation: $e';
     } finally {
@@ -335,16 +375,21 @@ class AppAuthProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> acceptGroupInvitation(String invitationId, String groupId, String userId) async {
+  Future<void> acceptGroupInvitation(
+      String invitationId, String groupId, String userId) async {
     _isLoading = true;
     notifyListeners();
     try {
       await FirebaseFirestore.instance.runTransaction((transaction) async {
-        final invitationRef = FirebaseFirestore.instance.collection('group_invitations').doc(invitationId);
-        final groupRef = FirebaseFirestore.instance.collection('groups').doc(groupId);
+        final invitationRef = FirebaseFirestore.instance
+            .collection('group_invitations')
+            .doc(invitationId);
+        final groupRef =
+            FirebaseFirestore.instance.collection('groups').doc(groupId);
 
         final invitationDoc = await transaction.get(invitationRef);
-        if (!invitationDoc.exists || invitationDoc.data()?['status'] != 'pending') {
+        if (!invitationDoc.exists ||
+            invitationDoc.data()?['status'] != 'pending') {
           throw 'Invitation not found or no longer pending.';
         }
 
@@ -378,7 +423,10 @@ class AppAuthProvider extends ChangeNotifier {
     _isLoading = true;
     notifyListeners();
     try {
-      await FirebaseFirestore.instance.collection('group_invitations').doc(invitationId).update({
+      await FirebaseFirestore.instance
+          .collection('group_invitations')
+          .doc(invitationId)
+          .update({
         'status': 'rejected',
         'rejectedAt': FieldValue.serverTimestamp(),
       });
@@ -401,7 +449,11 @@ class AppAuthProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      await FirebaseFirestore.instance.collection('groups').doc(groupId).collection('expenses').add({
+      await FirebaseFirestore.instance
+          .collection('groups')
+          .doc(groupId)
+          .collection('expenses')
+          .add({
         'description': description,
         'amount': amount,
         'paidBy': paidBy,
@@ -418,7 +470,10 @@ class AppAuthProvider extends ChangeNotifier {
 
   Future<void> loadPinned() async {
     if (_user == null) return;
-    final doc = await FirebaseFirestore.instance.collection('users').doc(_user!.uid).get();
+    final doc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(_user!.uid)
+        .get();
     final data = doc.data();
     _pinnedGroups = List<String>.from(data?['pinnedGroups'] ?? []);
     _pinnedChats = List<String>.from(data?['pinnedChats'] ?? []);
@@ -432,7 +487,10 @@ class AppAuthProvider extends ChangeNotifier {
     } else {
       _pinnedGroups.add(groupId);
     }
-    await FirebaseFirestore.instance.collection('users').doc(_user!.uid).update({'pinnedGroups': _pinnedGroups});
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(_user!.uid)
+        .update({'pinnedGroups': _pinnedGroups});
     notifyListeners();
   }
 
@@ -443,13 +501,19 @@ class AppAuthProvider extends ChangeNotifier {
     } else {
       _pinnedChats.add(chatId);
     }
-    await FirebaseFirestore.instance.collection('users').doc(_user!.uid).update({'pinnedChats': _pinnedChats});
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(_user!.uid)
+        .update({'pinnedChats': _pinnedChats});
     notifyListeners();
   }
 
   Future<void> loadMuteArchive() async {
     if (_user == null) return;
-    final doc = await FirebaseFirestore.instance.collection('users').doc(_user!.uid).get();
+    final doc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(_user!.uid)
+        .get();
     final data = doc.data();
     _mutedGroups = List<String>.from(data?['mutedGroups'] ?? []);
     _mutedChats = List<String>.from(data?['mutedChats'] ?? []);
@@ -465,7 +529,10 @@ class AppAuthProvider extends ChangeNotifier {
     } else {
       _mutedGroups.add(groupId);
     }
-    await FirebaseFirestore.instance.collection('users').doc(_user!.uid).update({'mutedGroups': _mutedGroups});
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(_user!.uid)
+        .update({'mutedGroups': _mutedGroups});
     notifyListeners();
   }
 
@@ -476,7 +543,10 @@ class AppAuthProvider extends ChangeNotifier {
     } else {
       _mutedChats.add(chatId);
     }
-    await FirebaseFirestore.instance.collection('users').doc(_user!.uid).update({'mutedChats': _mutedChats});
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(_user!.uid)
+        .update({'mutedChats': _mutedChats});
     notifyListeners();
   }
 
@@ -487,7 +557,10 @@ class AppAuthProvider extends ChangeNotifier {
     } else {
       _archivedGroups.add(groupId);
     }
-    await FirebaseFirestore.instance.collection('users').doc(_user!.uid).update({'archivedGroups': _archivedGroups});
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(_user!.uid)
+        .update({'archivedGroups': _archivedGroups});
     notifyListeners();
   }
 
@@ -498,17 +571,22 @@ class AppAuthProvider extends ChangeNotifier {
     } else {
       _archivedChats.add(chatId);
     }
-    await FirebaseFirestore.instance.collection('users').doc(_user!.uid).update({'archivedChats': _archivedChats});
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(_user!.uid)
+        .update({'archivedChats': _archivedChats});
     notifyListeners();
   }
 
   Stream<UserModel?> get userStream {
-    return _authService.authStateChanges.asyncMap((user) => user != null ? getUserModel(user.uid) : null);
+    return _authService.authStateChanges
+        .asyncMap((user) => user != null ? getUserModel(user.uid) : null);
   }
 
   Future<UserModel?> getUserModel(String uid) async {
     try {
-      final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      final doc =
+          await FirebaseFirestore.instance.collection('users').doc(uid).get();
       if (doc.exists) {
         return UserModel.fromFirestore(doc);
       }
@@ -521,4 +599,4 @@ class AppAuthProvider extends ChangeNotifier {
   Future<void> signUp(String email, String password, String username) async {
     // ... existing code ...
   }
-} 
+}

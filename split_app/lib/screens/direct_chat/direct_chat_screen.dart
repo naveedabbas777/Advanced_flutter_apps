@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:async';
 import 'package:split_app/models/direct_message_model.dart';
+import '../../services/badge_service.dart';
 
 class DirectChatScreen extends StatefulWidget {
   final String chatId;
@@ -46,6 +47,26 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
         .collection('typing')
         .doc(user.uid)
         .set({'typing': typing}, SetOptions(merge: true));
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _markChatAsSeen();
+  }
+
+  Future<void> _markChatAsSeen() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    await FirebaseFirestore.instance
+        .collection('direct_chats')
+        .doc(widget.chatId)
+        .collection('chatViews')
+        .doc(user.uid)
+        .set({'lastSeen': FieldValue.serverTimestamp()},
+            SetOptions(merge: true));
+    // Update badge
+    await BadgeService().updateBadge();
   }
 
   @override
@@ -268,6 +289,10 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
       'lastMessageTime': FieldValue.serverTimestamp(),
       'lastMessage': text,
     });
+
+    // Note: Local notifications are handled automatically by NotificationListenerService
+    // which filters out notifications for own messages
+
     _messageController.clear();
     setState(() => _isSending = false);
   }

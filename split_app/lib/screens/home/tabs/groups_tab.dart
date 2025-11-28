@@ -122,195 +122,299 @@ class _GroupsTabState extends State<GroupsTab> {
                             ],
                           ),
                         )
-                      : RefreshIndicator(
-                          onRefresh: _fetchGroups,
-                          child: ListView.builder(
-                            itemCount: _groups
-                                .where((g) =>
-                                    g.name.toLowerCase().contains(_groupSearch))
-                                .length,
-                            itemBuilder: (context, index) {
-                              final filteredGroups = _groups
-                                  .where((g) => g.name
-                                      .toLowerCase()
-                                      .contains(_groupSearch))
-                                  .toList();
-                              final group = filteredGroups[index];
-                              final admin = group.members.firstWhere(
-                                (m) => m.isAdmin,
-                                orElse: () => GroupMember(
-                                  userId: '',
-                                  username: 'N/A',
-                                  email: '',
-                                  isAdmin: false,
-                                  joinedAt: DateTime.now(),
-                                ),
-                              );
-                              final user = Provider.of<AppAuthProvider>(context,
-                                      listen: false)
-                                  .currentUser;
-                              final userId = user?.uid ?? '';
+                      : Consumer<AppAuthProvider>(
+                          builder: (context, authProvider, _) {
+                            final currentUser = authProvider.currentUser;
+                            if (currentUser == null) {
+                              return const Center(
+                                  child: Text('User not logged in.'));
+                            }
 
-                              return FutureBuilder<List<int>>(
-                                future: _getUnseenCounts(group.id, userId),
-                                builder: (context, snapshot) {
-                                  int unseenMessages = 0;
-                                  int unseenExpenses = 0;
-                                  if (snapshot.hasData) {
-                                    unseenMessages = snapshot.data![0];
-                                    unseenExpenses = snapshot.data![1];
-                                  }
-                                  return Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 12.0, vertical: 6.0),
-                                    child: Material(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(16),
-                                      elevation: 1,
-                                      child: InkWell(
-                                        borderRadius: BorderRadius.circular(16),
-                                        onTap: () {
-                                          Navigator.of(context).push(
-                                            MaterialPageRoute(
-                                              builder: (_) =>
-                                                  GroupDetailsScreen(
-                                                      groupId: group.id),
-                                            ),
-                                          );
-                                        },
-                                        child: Container(
-                                          decoration: BoxDecoration(
-                                            border: Border.all(
-                                                color: Colors.grey.shade300,
-                                                width: 1),
-                                            borderRadius:
-                                                BorderRadius.circular(16),
-                                          ),
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 8, vertical: 4),
-                                          child: Row(
-                                            children: [
-                                              badges.Badge(
-                                                showBadge: unseenMessages > 0,
-                                                badgeContent: Text(
-                                                    '$unseenMessages',
-                                                    style: const TextStyle(
-                                                        color: Colors.white,
-                                                        fontSize: 10)),
-                                                position:
-                                                    badges.BadgePosition.topEnd(
-                                                        top: -8, end: -8),
-                                                child: badges.Badge(
-                                                  showBadge: unseenExpenses > 0,
-                                                  badgeContent: Text(
-                                                      '$unseenExpenses',
-                                                      style: const TextStyle(
-                                                          color: Colors.white,
-                                                          fontSize: 10)),
-                                                  position: badges.BadgePosition
-                                                      .bottomEnd(
-                                                          bottom: -8, end: -8),
-                                                  child: CircleAvatar(
-                                                    radius: 26,
-                                                    child: Text(
-                                                      group.name.isNotEmpty
-                                                          ? group.name
-                                                              .substring(0, 1)
-                                                              .toUpperCase()
-                                                          : '?',
-                                                      style: const TextStyle(
-                                                          fontSize: 22,
-                                                          fontWeight:
-                                                              FontWeight.bold),
+                            return StreamBuilder<QuerySnapshot>(
+                              stream: FirebaseFirestore.instance
+                                  .collection('groups')
+                                  .where('memberIds',
+                                      arrayContains: currentUser.uid)
+                                  .snapshots(),
+                              builder: (context, groupsSnapshot) {
+                                if (!groupsSnapshot.hasData) {
+                                  return const Center(
+                                      child: CircularProgressIndicator());
+                                }
+                                final groups = groupsSnapshot.data!.docs
+                                    .map((doc) => GroupModel.fromFirestore(doc))
+                                    .where((g) => g.name
+                                        .toLowerCase()
+                                        .contains(_groupSearch))
+                                    .toList();
+
+                                if (groups.isEmpty) {
+                                  return Center(
+                                    child: Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Icon(Icons.group_outlined,
+                                            size: 48, color: Colors.grey),
+                                        SizedBox(height: 12),
+                                        Text('No groups yet.',
+                                            style: TextStyle(
+                                                fontSize: 18,
+                                                color: Colors.grey)),
+                                      ],
+                                    ),
+                                  );
+                                }
+
+                                return RefreshIndicator(
+                                  onRefresh: _fetchGroups,
+                                  child: ListView.builder(
+                                    itemCount: groups.length,
+                                    itemBuilder: (context, index) {
+                                      final group = groups[index];
+                                      final admin = group.members.firstWhere(
+                                        (m) => m.isAdmin,
+                                        orElse: () => GroupMember(
+                                          userId: '',
+                                          username: 'N/A',
+                                          email: '',
+                                          isAdmin: false,
+                                          joinedAt: DateTime.now(),
+                                        ),
+                                      );
+                                      final userId = currentUser.uid;
+
+                                      return StreamBuilder<List<int>>(
+                                        stream: _getUnseenCountsStream(
+                                            group.id, userId),
+                                        builder: (context, snapshot) {
+                                          int unseenMessages = 0;
+                                          int unseenExpenses = 0;
+                                          int unseenNotifications = 0;
+                                          if (snapshot.hasData) {
+                                            unseenMessages = snapshot.data![0];
+                                            unseenExpenses = snapshot.data![1];
+                                            unseenNotifications =
+                                                snapshot.data![2];
+                                          }
+                                          return Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 12.0,
+                                                vertical: 6.0),
+                                            child: Material(
+                                              color: Colors.white,
+                                              borderRadius:
+                                                  BorderRadius.circular(16),
+                                              elevation: 1,
+                                              child: InkWell(
+                                                borderRadius:
+                                                    BorderRadius.circular(16),
+                                                onTap: () {
+                                                  Navigator.of(context).push(
+                                                    MaterialPageRoute(
+                                                      builder: (_) =>
+                                                          GroupDetailsScreen(
+                                                              groupId:
+                                                                  group.id),
                                                     ),
+                                                  );
+                                                },
+                                                child: Container(
+                                                  decoration: BoxDecoration(
+                                                    border: Border.all(
+                                                        color: Colors
+                                                            .grey.shade300,
+                                                        width: 1),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            16),
+                                                  ),
+                                                  padding: const EdgeInsets
+                                                      .symmetric(
+                                                      horizontal: 8,
+                                                      vertical: 4),
+                                                  child: Row(
+                                                    children: [
+                                                      badges.Badge(
+                                                        showBadge:
+                                                            unseenMessages > 0,
+                                                        badgeContent: Text(
+                                                            '$unseenMessages',
+                                                            style:
+                                                                const TextStyle(
+                                                                    color: Colors
+                                                                        .white,
+                                                                    fontSize:
+                                                                        10)),
+                                                        position:
+                                                            badges.BadgePosition
+                                                                .topEnd(
+                                                                    top: -8,
+                                                                    end: -8),
+                                                        child: badges.Badge(
+                                                          showBadge:
+                                                              unseenExpenses >
+                                                                  0,
+                                                          badgeContent: Text(
+                                                              '$unseenExpenses',
+                                                              style: const TextStyle(
+                                                                  color: Colors
+                                                                      .white,
+                                                                  fontSize:
+                                                                      10)),
+                                                          position: badges
+                                                                  .BadgePosition
+                                                              .bottomEnd(
+                                                                  bottom: -8,
+                                                                  end: -8),
+                                                          child: badges.Badge(
+                                                            showBadge:
+                                                                unseenNotifications >
+                                                                    0,
+                                                            badgeContent: Text(
+                                                                unseenNotifications >
+                                                                        99
+                                                                    ? '99+'
+                                                                    : '$unseenNotifications',
+                                                                style: const TextStyle(
+                                                                    color: Colors
+                                                                        .white,
+                                                                    fontSize:
+                                                                        10)),
+                                                            position: badges
+                                                                    .BadgePosition
+                                                                .topStart(
+                                                                    top: -8,
+                                                                    start: -8),
+                                                            child: CircleAvatar(
+                                                              radius: 26,
+                                                              child: Text(
+                                                                group.name
+                                                                        .isNotEmpty
+                                                                    ? group.name
+                                                                        .substring(
+                                                                            0,
+                                                                            1)
+                                                                        .toUpperCase()
+                                                                    : '?',
+                                                                style: const TextStyle(
+                                                                    fontSize:
+                                                                        22,
+                                                                    fontWeight:
+                                                                        FontWeight
+                                                                            .bold),
+                                                              ),
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ),
+                                                      const SizedBox(width: 14),
+                                                      Expanded(
+                                                        child: Column(
+                                                          crossAxisAlignment:
+                                                              CrossAxisAlignment
+                                                                  .start,
+                                                          children: [
+                                                            Row(
+                                                              mainAxisAlignment:
+                                                                  MainAxisAlignment
+                                                                      .spaceBetween,
+                                                              children: [
+                                                                Expanded(
+                                                                  child: Text(
+                                                                    group.name,
+                                                                    style:
+                                                                        const TextStyle(
+                                                                      fontWeight:
+                                                                          FontWeight
+                                                                              .w600,
+                                                                      fontSize:
+                                                                          17,
+                                                                    ),
+                                                                    overflow:
+                                                                        TextOverflow
+                                                                            .ellipsis,
+                                                                  ),
+                                                                ),
+                                                                if (group
+                                                                        .lastMessageTime !=
+                                                                    null)
+                                                                  Text(
+                                                                    DateFormat(
+                                                                            'hh:mm a')
+                                                                        .format(
+                                                                            group.lastMessageTime!),
+                                                                    style:
+                                                                        TextStyle(
+                                                                      color: Colors
+                                                                          .grey
+                                                                          .shade600,
+                                                                      fontSize:
+                                                                          13,
+                                                                    ),
+                                                                  ),
+                                                              ],
+                                                            ),
+                                                            const SizedBox(
+                                                                height: 4),
+                                                            Text(
+                                                              group.lastMessage ??
+                                                                  'No messages yet.',
+                                                              maxLines: 1,
+                                                              overflow:
+                                                                  TextOverflow
+                                                                      .ellipsis,
+                                                              style: TextStyle(
+                                                                color: Colors
+                                                                    .grey
+                                                                    .shade700,
+                                                                fontSize: 15,
+                                                              ),
+                                                            ),
+                                                            const SizedBox(
+                                                                height: 2),
+                                                            Text(
+                                                              '${group.members.length} Members | Admin: ${admin.username} | ${group.expenseCount} Expenses',
+                                                              style: TextStyle(
+                                                                  fontSize: 12,
+                                                                  color: Colors
+                                                                      .grey
+                                                                      .shade600),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      ),
+                                                    ],
                                                   ),
                                                 ),
                                               ),
-                                              const SizedBox(width: 14),
-                                              Expanded(
-                                                child: Column(
-                                                  crossAxisAlignment:
-                                                      CrossAxisAlignment.start,
-                                                  children: [
-                                                    Row(
-                                                      mainAxisAlignment:
-                                                          MainAxisAlignment
-                                                              .spaceBetween,
-                                                      children: [
-                                                        Expanded(
-                                                          child: Text(
-                                                            group.name,
-                                                            style:
-                                                                const TextStyle(
-                                                              fontWeight:
-                                                                  FontWeight
-                                                                      .w600,
-                                                              fontSize: 17,
-                                                            ),
-                                                            overflow:
-                                                                TextOverflow
-                                                                    .ellipsis,
-                                                          ),
-                                                        ),
-                                                        if (group
-                                                                .lastMessageTime !=
-                                                            null)
-                                                          Text(
-                                                            DateFormat(
-                                                                    'hh:mm a')
-                                                                .format(group
-                                                                    .lastMessageTime!),
-                                                            style: TextStyle(
-                                                              color: Colors.grey
-                                                                  .shade600,
-                                                              fontSize: 13,
-                                                            ),
-                                                          ),
-                                                      ],
-                                                    ),
-                                                    const SizedBox(height: 4),
-                                                    Text(
-                                                      group.lastMessage ??
-                                                          'No messages yet.',
-                                                      maxLines: 1,
-                                                      overflow:
-                                                          TextOverflow.ellipsis,
-                                                      style: TextStyle(
-                                                        color: Colors
-                                                            .grey.shade700,
-                                                        fontSize: 15,
-                                                      ),
-                                                    ),
-                                                    const SizedBox(height: 2),
-                                                    Text(
-                                                      '${group.members.length} Members | Admin: ${admin.username} | ${group.expenseCount} Expenses',
-                                                      style: TextStyle(
-                                                          fontSize: 12,
-                                                          color: Colors
-                                                              .grey.shade600),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                },
-                              );
-                            },
-                          ),
+                                            ),
+                                          );
+                                        },
+                                      );
+                                    },
+                                  ),
+                                );
+                              },
+                            );
+                          },
                         ),
         ),
       ],
     );
   }
 
+  Stream<List<int>> _getUnseenCountsStream(String groupId, String userId) {
+    return Stream.periodic(const Duration(seconds: 2), (_) async {
+      return await _getUnseenCounts(groupId, userId);
+    }).asyncMap((future) => future);
+  }
+
   Future<List<int>> _getUnseenCounts(String groupId, String userId) async {
     int unseenMessages = 0;
     int unseenExpenses = 0;
+    int unseenNotifications = 0;
+
     // Get last seen for messages
     final chatViewDoc = await FirebaseFirestore.instance
         .collection('groups')
@@ -340,6 +444,7 @@ class _GroupsTabState extends State<GroupsTab> {
       unseenMessages =
           msgQuery.docs.where((doc) => doc['senderId'] != userId).length;
     }
+
     // Get last seen for expenses
     final expenseViewDoc = await FirebaseFirestore.instance
         .collection('groups')
@@ -370,6 +475,55 @@ class _GroupsTabState extends State<GroupsTab> {
       unseenExpenses =
           expenseQuery.docs.where((doc) => doc['addedBy'] != userId).length;
     }
-    return [unseenMessages, unseenExpenses];
+
+    // Get unseen group notifications (expense notifications, events, settlements)
+    try {
+      // Group expense notifications
+      final expenseNotificationsQuery = await FirebaseFirestore.instance
+          .collection('group_expense_notifications')
+          .where('userId', isEqualTo: userId)
+          .where('groupId', isEqualTo: groupId)
+          .where('seen', isEqualTo: false)
+          .get();
+      unseenNotifications += expenseNotificationsQuery.docs.length;
+
+      // Group events
+      final groupEventsQuery = await FirebaseFirestore.instance
+          .collection('group_events')
+          .where('userId', isEqualTo: userId)
+          .where('groupId', isEqualTo: groupId)
+          .where('seen', isEqualTo: false)
+          .get();
+      unseenNotifications += groupEventsQuery.docs.length;
+
+      // Settlements (unseen settlements for this group)
+      // Note: Firestore doesn't support multiple where clauses with OR easily
+      // So we'll check settlements separately
+      final settlementsFromQuery = await FirebaseFirestore.instance
+          .collection('groups')
+          .doc(groupId)
+          .collection('settlements')
+          .where('fromUserId', isEqualTo: userId)
+          .where('seen', isEqualTo: false)
+          .get();
+      final settlementsToQuery = await FirebaseFirestore.instance
+          .collection('groups')
+          .doc(groupId)
+          .collection('settlements')
+          .where('toUserId', isEqualTo: userId)
+          .where('seen', isEqualTo: false)
+          .get();
+      // Combine and deduplicate
+      final allSettlements = {
+        ...settlementsFromQuery.docs.map((d) => d.id),
+        ...settlementsToQuery.docs.map((d) => d.id),
+      };
+      unseenNotifications += allSettlements.length;
+    } catch (e) {
+      // If any query fails, just continue with 0 for that type
+      print('Error fetching group notifications: $e');
+    }
+
+    return [unseenMessages, unseenExpenses, unseenNotifications];
   }
 }

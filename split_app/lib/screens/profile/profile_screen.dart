@@ -309,53 +309,41 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       );
                     },
                   ),
-                  ListTile(
-                    leading: const Icon(Icons.group),
-                    title: const Text('My Groups'),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () {
-                      // Navigate to a screen showing group details if needed
-                    },
-                  ),
                   StreamBuilder<List<GroupModel>>(
                     stream: Provider.of<GroupProvider>(context, listen: false)
                         .getUserGroupsStream(userModel.uid),
                     builder: (context, snapshot) {
                       if (snapshot.connectionState == ConnectionState.waiting) {
-                        return const Center(child: CircularProgressIndicator());
+                        return ListTile(
+                          leading: const Icon(Icons.group),
+                          title: const Text('My Groups'),
+                          trailing: const CircularProgressIndicator(),
+                        );
                       }
                       if (snapshot.hasError) {
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                          child: Text(
-                              'Error loading groups: \\${snapshot.error}',
-                              style: TextStyle(color: Colors.red)),
+                        return ListTile(
+                          leading: const Icon(Icons.group),
+                          title: const Text('My Groups'),
+                          subtitle: Text(
+                            'Error loading groups',
+                            style: TextStyle(color: Colors.red),
+                          ),
                         );
                       }
-                      if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                        return const Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 16.0),
-                          child: Text('No groups joined yet.'),
-                        );
-                      }
-                      return ListView.builder(
-                        shrinkWrap: true,
-                        physics: NeverScrollableScrollPhysics(),
-                        itemCount: snapshot.data!.length,
-                        itemBuilder: (context, index) {
-                          final group = snapshot.data![index];
-                          return ListTile(
-                            title: Text(group.name,
-                                style: TextStyle(fontWeight: FontWeight.w500)),
-                            onTap: () {
-                              // Navigate to group details screen
-                              Navigator.pushNamed(context, '/group-details',
-                                  arguments: {
-                                    'groupId': group.id,
-                                    'groupName': group.name
-                                  });
-                            },
-                          );
+                      final groups = snapshot.data ?? [];
+                      final groupCount = groups.length;
+                      return ListTile(
+                        leading: const Icon(Icons.group),
+                        title: const Text('My Groups'),
+                        subtitle: Text(
+                          groupCount == 0
+                              ? 'No groups joined yet'
+                              : '$groupCount ${groupCount == 1 ? 'group' : 'groups'}',
+                        ),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () {
+                          // Navigate to groups tab or home screen
+                          Navigator.pop(context);
                         },
                       );
                     },

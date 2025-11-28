@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
+import '../../services/badge_service.dart';
 
 class GroupChatScreen extends StatefulWidget {
   final String groupId;
   final String groupName;
-  const GroupChatScreen({Key? key, required this.groupId, required this.groupName}) : super(key: key);
+  const GroupChatScreen(
+      {Key? key, required this.groupId, required this.groupName})
+      : super(key: key);
 
   @override
   State<GroupChatScreen> createState() => _GroupChatScreenState();
@@ -31,7 +32,10 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         .doc(widget.groupId)
         .collection('chatViews')
         .doc(user.uid)
-        .set({'lastSeen': FieldValue.serverTimestamp()}, SetOptions(merge: true));
+        .set({'lastSeen': FieldValue.serverTimestamp()},
+            SetOptions(merge: true));
+    // Update app icon badge
+    await BadgeService().updateBadge();
   }
 
   @override
@@ -68,27 +72,45 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                     final msg = messages[index].data() as Map<String, dynamic>;
                     final isMe = msg['senderId'] == userId;
                     return Align(
-                      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+                      alignment:
+                          isMe ? Alignment.centerRight : Alignment.centerLeft,
                       child: Container(
-                        margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                        margin: const EdgeInsets.symmetric(
+                            vertical: 4, horizontal: 8),
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: isMe ? Theme.of(context).colorScheme.primary.withOpacity(0.2) : Colors.grey[200],
+                          color: isMe
+                              ? Theme.of(context)
+                                  .colorScheme
+                                  .primary
+                                  .withOpacity(0.2)
+                              : Colors.grey[200],
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Column(
-                          crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                          crossAxisAlignment: isMe
+                              ? CrossAxisAlignment.end
+                              : CrossAxisAlignment.start,
                           children: [
                             Text(
                               msg['senderName'] ?? 'Unknown',
-                              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey[700], fontSize: 12),
+                              style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.grey[700],
+                                  fontSize: 12),
                             ),
                             const SizedBox(height: 2),
-                            Text(msg['text'] ?? '', style: TextStyle(fontSize: 16)),
+                            Text(msg['text'] ?? '',
+                                style: TextStyle(fontSize: 16)),
                             if (msg['timestamp'] != null)
                               Text(
-                                (msg['timestamp'] as Timestamp).toDate().toLocal().toString().substring(0, 16),
-                                style: TextStyle(fontSize: 10, color: Colors.grey[500]),
+                                (msg['timestamp'] as Timestamp)
+                                    .toDate()
+                                    .toLocal()
+                                    .toString()
+                                    .substring(0, 16),
+                                style: TextStyle(
+                                    fontSize: 10, color: Colors.grey[500]),
                               ),
                           ],
                         ),
@@ -119,7 +141,10 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                 const SizedBox(width: 8),
                 IconButton(
                   icon: _isSending
-                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2))
                       : const Icon(Icons.send),
                   onPressed: _isSending ? null : _sendMessage,
                   color: Theme.of(context).colorScheme.primary,
@@ -138,11 +163,12 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     setState(() => _isSending = true);
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
-    final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+    final userDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .get();
     final username = userDoc.data()?['username'] ?? user.email ?? 'Unknown';
-    await FirebaseFirestore.instance
-        .collection('group_messages')
-        .add({
+    await FirebaseFirestore.instance.collection('group_messages').add({
       'groupId': widget.groupId,
       'text': text,
       'senderId': user.uid,
@@ -151,12 +177,18 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     });
 
     // Update the group with the last message info
-    await FirebaseFirestore.instance.collection('groups').doc(widget.groupId).update({
+    await FirebaseFirestore.instance
+        .collection('groups')
+        .doc(widget.groupId)
+        .update({
       'lastMessage': text,
       'lastMessageTime': FieldValue.serverTimestamp(),
     });
 
+    // Note: Local notifications are handled automatically by NotificationListenerService
+    // which filters out notifications for own messages and checks if user is viewing chat
+
     _messageController.clear();
     setState(() => _isSending = false);
   }
-} 
+}
