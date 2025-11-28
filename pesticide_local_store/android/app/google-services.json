@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "345913463232",
+    "project_id": "naya-sawera-zarai-servce",
+    "storage_bucket": "naya-sawera-zarai-servce.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:345913463232:android:16aa68e998bf1dc60af825",
+        "android_client_info": {
+          "package_name": "com.example.pesticide_local_store"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCVxML1FcBiredSKSxtx1ZPEcbjRlEEdBA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
