@@ -12,7 +12,7 @@ android {
 
     defaultConfig {
         applicationId = "com.example.pesticide_local_store"
-        minSdk = 23 // ✅ Set to match Firebase min requirement
+        minSdk = flutter.minSdkVersion // ✅ Set to match Firebase min requirement
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName

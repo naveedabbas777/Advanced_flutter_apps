@@ -5,9 +5,7 @@ import 'modules/auth/login_screen.dart';
 import 'modules/products/product_list_screen.dart';
 import 'modules/sales/sales_home_screen.dart';
 import 'modules/sales_history/sales_history_screen.dart';
-import 'modules/udhar/udhar_home_screen.dart';
 import 'modules/stock/stock_home_screen.dart';
-import 'modules/export_print/export_print_screen.dart';
 import 'modules/settings/settings_screen.dart';
 import 'modules/udhar/udhar_customer_list_screen.dart';
 import 'modules/expenses/expenses_screen.dart';
@@ -20,7 +18,7 @@ void main() async {
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({Key? key}) : super(key: key);
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -32,11 +30,9 @@ class MyApp extends StatelessWidget {
           seedColor: Colors.deepPurple,
           primary: Colors.deepPurple,
           secondary: Colors.yellow[700]!,
-          background: Colors.white,
           surface: Colors.white,
           onPrimary: Colors.white,
           onSecondary: Colors.deepPurple,
-          onBackground: Colors.deepPurple,
           onSurface: Colors.deepPurple,
         ),
         scaffoldBackgroundColor: Colors.white,
@@ -66,7 +62,7 @@ class MyApp extends StatelessWidget {
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide(color: Colors.deepPurple, width: 2),
+            borderSide: const BorderSide(color: Colors.deepPurple, width: 2),
           ),
           labelStyle: const TextStyle(color: Colors.deepPurple),
         ),
@@ -74,11 +70,11 @@ class MyApp extends StatelessWidget {
           backgroundColor: Colors.yellow,
           foregroundColor: Colors.deepPurple,
         ),
-        cardTheme: CardTheme(
+        cardTheme: const CardThemeData(
           color: Colors.white,
           elevation: 3,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.all(Radius.circular(16)),
           ),
         ),
       ),
@@ -88,7 +84,7 @@ class MyApp extends StatelessWidget {
 }
 
 class AppDashboard extends StatelessWidget {
-  const AppDashboard({Key? key}) : super(key: key);
+  const AppDashboard({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -193,7 +189,7 @@ class _ModuleNav {
 
 class _ModuleCard extends StatelessWidget {
   final _ModuleNav module;
-  const _ModuleCard({required this.module, Key? key}) : super(key: key);
+  const _ModuleCard({required this.module, super.key});
   @override
   Widget build(BuildContext context) {
     return Card(
