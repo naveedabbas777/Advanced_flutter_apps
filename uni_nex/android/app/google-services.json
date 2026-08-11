@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "625720401076",
+    "project_id": "uninex-dddfc",
+    "storage_bucket": "uninex-dddfc.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:625720401076:android:614622788ff9eb7eca4be1",
+        "android_client_info": {
+          "package_name": "com.example.uni_nex"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "625720401076-bpnhhjvscdtqnagopdv23dp1slo1fn84.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.uni_nex",
+            "certificate_hash": "cbe1acddd5d7610ce231416ce298865bb9269aff"
+          }
+        },
+        {
+          "client_id": "625720401076-7jkas4iuc3grs9qns8v3erdbvnc1qmeh.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDwETuPvK7DGTWV-GBVby1JjjWMqvpDb3o"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "625720401076-7jkas4iuc3grs9qns8v3erdbvnc1qmeh.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
