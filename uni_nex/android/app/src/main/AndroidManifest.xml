@@ -8,8 +8,7 @@
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <meta-data
-            android:name="com.mapbox.maps.ACCESS_TOKEN"
-            android:value="pk.eyJ1IjoiYXdhaXN2ZWVyIiwiYSI6ImNtbTM3ZzNkZDBjbW4ycXNlZTU0dXNhbGUifQ.jc-drltLU8W4IG8eEJCB6Q" />
+            
         <activity
             android:name=".MainActivity"
             android:exported="true"
